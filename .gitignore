@@ -1,0 +1,31 @@
+# Entorno y secretos
+.env
+*.env.*
+.agent/
+.gemini/
+
+# Dependencias Node.js
+node_modules/
+whatsapp-service/node_modules/
+
+# Sesiones de WhatsApp (generadas en VPS, no versionar)
+whatsapp-service/.wwebjs_auth/
+whatsapp-service/.wwebjs_cache/
+whatsapp-service/sessions/
+
+# Logs
+whatsapp-service/logs/
+*.log
+
+# Build
+dist/
+
+# IDE y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Archivos temporales
+*.tmp
+*.swp
