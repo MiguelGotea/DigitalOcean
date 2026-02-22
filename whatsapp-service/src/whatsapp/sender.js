@@ -1,6 +1,6 @@
 'use strict';
 
-const { API_BASE_URL, WSP_TOKEN } = require('./api');
+const { API_BASE_URL, WSP_TOKEN } = require('./config/api');
 
 /**
  * Construye el número de teléfono en formato WhatsApp: "<numero>@c.us"
