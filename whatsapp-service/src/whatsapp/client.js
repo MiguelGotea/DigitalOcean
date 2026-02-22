@@ -47,12 +47,9 @@ async function iniciarWhatsApp() {
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--disable-accelerated-video-decode',
-                '--no-first-run',
-                '--no-zygote',
-                '--single-process',
                 '--disable-gpu',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
                 '--disable-extensions',
                 '--disable-background-networking',
                 '--disable-default-apps',
@@ -60,9 +57,7 @@ async function iniciarWhatsApp() {
                 '--disable-translate',
                 '--metrics-recording-only',
                 '--safebrowsing-disable-auto-update',
-                '--ignore-certificate-errors',
-                '--ignore-ssl-errors',
-                '--ignore-certificate-errors-spki-list'
+                '--js-flags=--max-old-space-size=512'
             ]
         }
     });
