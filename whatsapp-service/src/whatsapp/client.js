@@ -19,10 +19,10 @@ async function iniciarWhatsApp() {
     // Detectar ejecutable de Chromium/Chrome disponible
     const fs = require('fs');
     const chromiumPaths = [
-        '/usr/bin/chromium',                // apt en Ubuntu 22.04
-        '/usr/bin/chromium-browser',        // apt alternativo
-        '/usr/bin/google-chrome-stable',    // Chrome estable
+        '/usr/bin/google-chrome-stable',    // Chrome estable (preferido)
         '/usr/bin/google-chrome',           // Chrome genérico
+        '/usr/bin/chromium',                // apt en Ubuntu sin snap
+        '/usr/bin/chromium-browser',        // último recurso (puede ser snap stub)
     ];
     const executablePath = chromiumPaths.find(p => fs.existsSync(p));
     if (!executablePath) {
