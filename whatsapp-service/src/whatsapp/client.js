@@ -130,7 +130,8 @@ function obtenerEstado() {
     };
 }
 
+function obtenerEstadoActual() { return estadoActual; }
 function obtenerQR() { return qrBase64; }
 function obtenerCliente() { return clienteWA; }
 
-module.exports = { iniciarWhatsApp, obtenerEstado, obtenerQR, obtenerCliente };
+module.exports = { iniciarWhatsApp, obtenerEstado, obtenerQR, obtenerCliente, reportarEstadoVPS, obtenerEstadoActual };
