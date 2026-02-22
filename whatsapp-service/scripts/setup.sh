@@ -66,6 +66,7 @@ ufw allow 22/tcp   comment 'SSH'
 ufw deny  3001/tcp comment 'API interna - solo localhost'
 echo "   Firewall activo"
 
+
 echo "============================================"
 echo "✅ Setup completado!"
 echo ""
