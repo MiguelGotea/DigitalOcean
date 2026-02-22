@@ -8,6 +8,7 @@ let estadoActual = 'desconectado';   // desconectado | qr_pendiente | conectado
 let qrBase64 = null;
 let clienteWA = null;
 
+
 /**
  * Inicializa el cliente de whatsapp-web.js con sesión persistente.
  * La sesión se guarda en .wwebjs_auth/ (excluida del repo).
