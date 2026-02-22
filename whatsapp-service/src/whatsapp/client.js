@@ -15,22 +15,53 @@ let clienteWA = null;
 async function iniciarWhatsApp() {
     console.log('📱 Iniciando cliente WhatsApp Web...');
 
+    // Detectar ejecutable de Chromium/Chrome disponible
+    const fs = require('fs');
+    const chromiumPaths = [
+        '/usr/bin/chromium',                // apt en Ubuntu 22.04
+        '/usr/bin/chromium-browser',        // apt alternativo
+        '/usr/bin/google-chrome-stable',    // Chrome estable
+        '/usr/bin/google-chrome',           // Chrome genérico
+    ];
+    const executablePath = chromiumPaths.find(p => fs.existsSync(p));
+    if (!executablePath) {
+        console.error('❌ No se encontró Chromium/Chrome. Ejecuta: apt install -y chromium');
+        process.exit(1);
+    }
+    console.log('🌐 Usando navegador:', executablePath);
+
     clienteWA = new Client({
         authStrategy: new LocalAuth({
             dataPath: '.wwebjs_auth'
         }),
+        // Cargar siempre la versión más reciente de WhatsApp Web
+        webVersionCache: {
+            type: 'remote',
+            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1015901134-alpha.html'
+        },
         puppeteer: {
             headless: true,
-            executablePath: '/usr/bin/chromium-browser',   // Chromium instalado en VPS Ubuntu
+            executablePath,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-accelerated-2d-canvas',
+                '--disable-accelerated-video-decode',
                 '--no-first-run',
                 '--no-zygote',
                 '--single-process',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--disable-extensions',
+                '--disable-background-networking',
+                '--disable-default-apps',
+                '--disable-sync',
+                '--disable-translate',
+                '--metrics-recording-only',
+                '--safebrowsing-disable-auto-update',
+                '--ignore-certificate-errors',
+                '--ignore-ssl-errors',
+                '--ignore-certificate-errors-spki-list'
             ]
         }
     });
