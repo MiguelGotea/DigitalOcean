@@ -1,3 +1,10 @@
+'use strict';
+
+require('dotenv').config();
+const express = require('express');
+const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion } = require('./whatsapp/client');
+const { iniciarWorker } = require('./workers/campaign_worker');
+const { iniciarCRMBot } = require('./workers/crm_bot_worker');
 const { WSP_INSTANCIA } = require('./config/api');
 
 const logApp = (msg) => {
