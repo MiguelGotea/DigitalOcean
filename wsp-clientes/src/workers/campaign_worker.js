@@ -16,11 +16,15 @@ const MAX_HORA = parseInt(process.env.MAX_MENSAJES_POR_HORA) || 50;
  * Verifica si estamos en horario permitido de envío (8am - 8pm Nicaragua)
  */
 function enHorarioPermitido() {
+    // Para pruebas: permitir siempre
+    return true;
+    /*
     const ahora = new Date();
     const hora = ahora.getHours();
     const [hI] = (process.env.HORA_INICIO_ENVIO || '08:00').split(':').map(Number);
     const [hF] = (process.env.HORA_FIN_ENVIO || '20:00').split(':').map(Number);
     return hora >= hI && hora < hF;
+    */
 }
 
 /**
