@@ -139,6 +139,20 @@ DELAY_MAX_SEGUNDOS=25
 
 Hacer push → el GitHub Action actualiza el VPS automáticamente.
 
+---
+
+### Checklist de Puntos Clave (Nueva Instancia)
+
+Si vas a clonar una instancia para crear otra (ej: de `wsp-clientes` a `wsp-planilla`), asegúrate de cumplir estos 5 puntos para evitar conflictos:
+
+1.  **Carpeta Independiente**: Crear `/var/www/wsp-X` con sus propios `node_modules`.
+2.  **Puerto Único**: Definir un puerto libre (ej: 3004) en el `.env` y mapearlo en `ecosystem.config.js`.
+3.  **Token Único**: Cada instancia debe tener su propio `WSP_TOKEN` para que la API sepa quién reporta.
+4.  **ClientID de Sesión**: En `client.js`, el `clientId` de `LocalAuth` debe ser único (ej: `session-planilla`) para que no compartan archivos de sesión de Chrome.
+5.  **Permisos ERP**: Registrar la nueva herramienta en la tabla `tools_erp` y vincularla al nombre de la instancia en los archivos AJAX.
+
+---
+
 #### Paso 4 — En la API bridge: soportar el nuevo token
 
 En `api.batidospitaya.com/api/wsp/auth.php`, agregar el nuevo token:
