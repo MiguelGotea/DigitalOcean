@@ -1,31 +1,22 @@
-# Entorno y secretos
+# Entorno — NO subir al repo
 .env
-*.env.*
-.agent/
-.gemini/
 
-# Dependencias Node.js
-node_modules/
-whatsapp-service/node_modules/
+# Sesiones WhatsApp (generadas en runtime por whatsapp-web.js)
+**/auth/
 
-# Sesiones de WhatsApp (generadas en VPS, no versionar)
-whatsapp-service/.wwebjs_auth/
-whatsapp-service/.wwebjs_cache/
-whatsapp-service/sessions/
+# Dependencias Node
+**/node_modules/
 
 # Logs
-whatsapp-service/logs/
+**/logs/
 *.log
 
-# Build
-dist/
-
-# IDE y sistema
+# IDE / Sistema
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 
-# Archivos temporales
-*.tmp
-*.swp
+# Agentes locales
+.agent/
+.gemini/
