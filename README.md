@@ -1,6 +1,7 @@
 # 🚀 DigitalOcean — Pitaya WhatsApp Service
 
-Repositorio del servicio de mensajería WhatsApp para Batidos Pitaya.
+Servicio de mensajería WhatsApp para Batidos Pitaya.
+Arquitectura **Opción A**: cada número WhatsApp corre como proceso PM2 independiente en el mismo VPS.
 
 ---
 
@@ -11,7 +12,9 @@ ERP (erp.batidospitaya.com / Hostinger)
        ↓ escribe campaña en BD MySQL
 api.batidospitaya.com/api/wsp/   ← puente central (PHP)
        ↑ polling cada 60s
-VPS DigitalOcean (Node.js + whatsapp-web.js)
+VPS DigitalOcean — múltiples instancias Node.js + whatsapp-web.js
+   ├── wsp-clientes  :3001  → Campañas a clientesclub
+   └── wsp-rrhh      :3002  → Planillas / info a colaboradores (futuro)
        ↓ envía mensajes
 WhatsApp Web
 ```
@@ -20,26 +23,174 @@ WhatsApp Web
 
 ---
 
-## Estructura
+## Estructura del repositorio
 
 ```
 .github/workflows/deploy-whatsapp.yml   # CI/CD: push → rsync al VPS → PM2 reload
 whatsapp-service/
 ├── src/
-│   ├── app.js                          # Entry point (Express :3001 localhost) + heartbeat
+│   ├── app.js                          # Entry point (Express localhost) + heartbeat
 │   ├── config/api.js                   # URL base + validación WSP_TOKEN
 │   ├── whatsapp/
-│   │   ├── client.js                   # Sesión WA (LocalAuth) + eventos + heartbeat exports
+│   │   ├── client.js                   # Sesión WA (LocalAuth) + resetearSesion()
 │   │   └── sender.js                   # Envío + anti-ban + imágenes
-│   └── workers/campaign_worker.js      # Cron cada 60s → polling → envío
+│   └── workers/campaign_worker.js      # Cron 60s → polling → envío + reset
 ├── scripts/
-│   ├── setup.sh                        # Instalación en VPS Ubuntu 22/24 desde cero
+│   ├── setup.sh                        # Instalación VPS Ubuntu desde cero
+│   ├── nuevo_numero_wsp.sh             # Deploy de una nueva instancia en el VPS
 │   └── test_api_connection.js          # Verifica conectividad VPS → API
-├── ecosystem.config.js                 # PM2: modo cluster, logs en ./logs/
-└── .env.example                        # Variables requeridas
+├── ecosystem.config.js                 # PM2 multi-instancia (una por número WA)
+└── .env.example                        # Variables requeridas por instancia
+```
+
+### Estructura en el VPS (Opción A — múltiples instancias)
+
+```
+/var/www/
+├── wsp-clientes/          # Instancia 1 — Campañas a clientesclub     → PM2: wsp-clientes  :3001
+│   ├── src/               # Código fuente (sincronizado desde GitHub)
+│   ├── .env               # Variables específicas de esta instancia
+│   ├── .wwebjs_auth/      # Sesión WhatsApp del número de marketing
+│   └── logs/
+│
+└── wsp-rrhh/              # Instancia 2 — Planillas a colaboradores   → PM2: wsp-rrhh      :3002  (FUTURO)
+    ├── src/
+    ├── .env
+    ├── .wwebjs_auth/      # Sesión WhatsApp del número de RRHH (sesión separada)
+    └── logs/
+```
+
+> **Principio clave:** Cada instancia es completamente independiente — propio puerto, propia sesión `.wwebjs_auth`, propio `.env`, propios logs. Si una cae, la otra sigue funcionando.
+
+---
+
+## Múltiples Números WhatsApp
+
+### Por qué Opción A (instancias separadas)
+
+| | Opción A ✅ | Opción B (un proceso, múltiples clientes) |
+|--|--|--|
+| Estabilidad | Alta — fallo aislado | Media — un crash afecta todo |
+| Logs | Separados por número | Mezclados |
+| Debug | Fácil | Difícil |
+| RAM extra | ~400MB por número adicional | ~400MB por número adicional |
+| Complejidad | Baja | Alta |
+
+Con el Droplet de 1GB + 2GB swap: la primera instancia usa ~400-500MB activo. Cada instancia adicional suma ~400MB activo. Para 2 instancias se recomienda **upgrade a 2GB RAM** (~$6/mes en DigitalOcean).
+
+---
+
+### Instancias planificadas
+
+| Nombre PM2 | Puerto | Uso | Estado |
+|-----------|--------|-----|--------|
+| `wsp-clientes` | 3001 | Campañas de marketing a `clientesclub` | ✅ Activo |
+| `wsp-rrhh` | 3002 | Info de planilla / notif. a `Operarios` | 🔜 Futuro |
+| `wsp-proveedores` | 3003 | *(reservado para futuros usos)* | — |
+
+---
+
+### Cómo agregar un número nuevo
+
+#### Paso 1 — En el VPS: crear la carpeta de la nueva instancia
+
+```bash
+ssh root@<IP_DROPLET>
+mkdir -p /var/www/wsp-rrhh
+cd /var/www/wsp-rrhh
+
+# Usar el script automatizado (copia src/, instala deps, crea .env base)
+bash /var/www/wsp-clientes/scripts/nuevo_numero_wsp.sh wsp-rrhh 3002
+```
+
+#### Paso 2 — Configurar el .env de la nueva instancia
+
+```bash
+nano /var/www/wsp-rrhh/.env
+```
+
+```env
+API_BASE_URL=https://api.batidospitaya.com
+WSP_TOKEN=TOKEN_DISTINTO_AL_DE_WSP_CLIENTES   # ← cambiar, token único por instancia
+PORT=3002
+HORA_INICIO_ENVIO=08:00
+HORA_FIN_ENVIO=20:00
+MAX_MENSAJES_DIA=150
+MAX_MENSAJES_POR_HORA=50
+DELAY_MIN_SEGUNDOS=8
+DELAY_MAX_SEGUNDOS=25
+```
+
+> ⚠️ **Cada instancia DEBE tener un token diferente** → el token identifica qué instancia está reportando su estado a la API.
+
+#### Paso 3 — En `ecosystem.config.js`: descomentar el bloque
+
+```js
+// En whatsapp-service/ecosystem.config.js, descomentar el bloque wsp-rrhh:
+{
+  name: 'wsp-rrhh',
+  script: 'src/app.js',
+  cwd: '/var/www/wsp-rrhh',
+  env: { NODE_ENV: 'production', PORT: 3002 },
+  out_file:  './logs/out.log',
+  error_file: './logs/error.log'
+}
+```
+
+Hacer push → el GitHub Action actualiza el VPS automáticamente.
+
+#### Paso 4 — En la API bridge: soportar el nuevo token
+
+En `api.batidospitaya.com/api/wsp/auth.php`, agregar el nuevo token:
+
+```php
+// Actualmente solo hay un token. Para múltiples instancias:
+const TOKENS_VALIDOS = [
+    'TOKEN_WSP_CLIENTES',   // instancia marketing
+    'TOKEN_WSP_RRHH',       // instancia RRHH
+];
+
+function verificarTokenVPS() {
+    $token = $_SERVER['HTTP_X_WSP_TOKEN'] ?? '';
+    if (!in_array($token, TOKENS_VALIDOS)) {
+        http_response_code(401);
+        die(json_encode(['error' => 'Token inválido']));
+    }
+}
+```
+
+#### Paso 5 — En la BD: tabla de sesión por instancia
+
+Actualmente `wsp_sesion_vps_` guarda una sola fila. Para múltiples instancias, agregar una columna `instancia`:
+
+```sql
+ALTER TABLE wsp_sesion_vps_ ADD COLUMN instancia VARCHAR(30) DEFAULT 'wsp-clientes';
+-- La instancia se identifica por el token recibido en registrar_sesion.php
+```
+
+#### Paso 6 — En el ERP: módulo específico por instancia
+
+Cada módulo del ERP llama a un endpoint que filtra por instancia:
+- `campanas_wsp` → llama API con `X-WSP-Token: TOKEN_WSP_CLIENTES`
+- `notif_rrhh` → llama API con `X-WSP-Token: TOKEN_WSP_RRHH`
+
+---
+
+### Comandos PM2 para múltiples instancias
+
+```bash
+pm2 status                          # Ver todas las instancias
+pm2 logs wsp-clientes --lines 30    # Logs de instancia clientes
+pm2 logs wsp-rrhh --lines 30        # Logs de instancia RRHH
+pm2 restart wsp-clientes            # Reiniciar solo clientes
+pm2 restart wsp-rrhh                # Reiniciar solo RRHH
+pm2 stop wsp-rrhh                   # Detener solo RRHH sin afectar clientes
+pm2 delete wsp-rrhh                 # Eliminar instancia de PM2
 ```
 
 ---
+
+
 
 ## GitHub Secrets requeridos
 
