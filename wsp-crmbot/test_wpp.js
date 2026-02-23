@@ -4,23 +4,14 @@ const fs = require('fs');
 console.log('🚀 Starting minimal WPP test...');
 
 const client = new Client({
-    webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018911162-alpha.html'
-    },
     puppeteer: {
-        headless: 'new',
+        headless: true,
         executablePath: '/usr/bin/google-chrome-stable',
         dumpio: true,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-gpu',
-            '--disable-dev-shm-usage',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-extensions'
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
         ]
     }
 });
