@@ -34,11 +34,13 @@ async function iniciarWhatsApp() {
     console.log('🌐 Usando navegador:', executablePath);
 
     // Limpiar SingletonLock si existe (de crashes anteriores)
-    const lockPath = path.join(process.cwd(), '.wwebjs_auth', 'session', 'SingletonLock');
+    // Con LocalAuth y clientId, la ruta es .wwebjs_auth/session-<clientId>/SingletonLock
+    const clientId = require('../config/api').WSP_INSTANCIA;
+    const lockPath = path.join(process.cwd(), '.wwebjs_auth', `session-${clientId}`, 'SingletonLock');
     if (fs.existsSync(lockPath)) {
         try {
             fs.unlinkSync(lockPath);
-            console.log('🔓 SingletonLock limpiado');
+            console.log(`🔓 SingletonLock limpiado para ${clientId}`);
         } catch (e) {
             console.warn('⚠️  No se pudo limpiar SingletonLock:', e.message);
         }
@@ -73,7 +75,10 @@ async function iniciarWhatsApp() {
                 '--disable-translate',
                 '--metrics-recording-only',
                 '--safebrowsing-disable-auto-update',
-                '--js-flags=--max-old-space-size=512'
+                '--js-flags=--max-old-space-size=256', // Menos RAM
+                '--disable-setuid-sandbox',
+                '--no-zygote',
+                '--single-process' // Útil para ahorrar memoria en VPS pequeños
             ]
         }
     });
