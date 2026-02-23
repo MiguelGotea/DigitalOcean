@@ -405,6 +405,42 @@ $TOKEN = WSP_TOKEN_SECRETO;  // siempre sincronizado
 
 ---
 
+### 8. Bloqueo en `initialize()` — WhatsApp Web Protocol
+
+**Síntoma:** El bot se queda "pegado" llamando a `client.initialize()`. `DEBUG='whatsapp-web.js*'` muestra que no hay progreso después del lanzamiento del navegador.
+
+**Causa:** Versión de `whatsapp-web.js` obsoleta (1.17.x - 1.26.x). WhatsApp actualiza sus scripts internos frecuentemente y las versiones viejas de la librería fallan al inyectar el código de control en el navegador.
+
+**Solución:**
+- Actualizar a `whatsapp-web.js@^1.34.6` o superior.
+- **Importante:** Al actualizar la librería, borrar la carpeta `node_modules` y `package-lock.json` para asegurar que las dependencias de Puppeteer también se actualicen.
+
+---
+
+### 9. Estabilidad de Instancias en Paralelo
+
+Para correr `wsp-clientes` y `wsp-crmbot` simultáneamente sin que una afecte a la otra:
+
+1. **Memoria RAM**: Es **obligatorio upgrade a 2GB RAM** en DigitalOcean. Con 1GB + Swap, el segundo Chrome suele causar *Thrashing* (intercambio excesivo con disco) lo que hace que los timeouts de conexión de WhatsApp expiren.
+2. **Aislamiento de Sesión**:
+   - Cada instancia **DEBE** tener su propio `cwd` en `ecosystem.config.js`.
+   - Cada instancia usa una subcarpeta de sesión única (ej: `.wwebjs_auth/session-clientes` vs `.wwebjs_auth/session-crmbot`).
+3. **Limpieza de Locks**: Puppeteer crea archivos `SingletonLock` dentro del profile. Si el proceso anterior cerró mal, el nuevo proceso no podrá abrir el perfil.
+   - **Fix Automático**: `client.js` incluye una limpieza agresiva de `SingletonLock` antes de lanzar el navegador.
+
+---
+
+### 10. Error `Target closed` o `Browser closed`
+
+**Síntoma:** `ProtocolError: Protocol error (Runtime.callFunctionOn): Target closed`.
+
+**Causa:** El proceso de Chrome fue matado por el sistema (OOM Killer) o crasheó por falta de recursos.
+
+**Solución:**
+- Verificar `dmesg | grep -i oom` para confirmar si fue el OOM Killer.
+- Aumentar el límite de memoria de Node: `node --max-old-space-size=1024 src/app.js`.
+- Asegurar que `--disable-gpu` y `--no-sandbox` estén presentes en los `puppeteer.args`.
+
 ## Guía para próximo proyecto: Mensajes a Colaboradores (Operarios)
 
 El próximo módulo enviará mensajes a colaboradores en la tabla `Operarios` en lugar de `clientesclub`. Diferencias a considerar:
