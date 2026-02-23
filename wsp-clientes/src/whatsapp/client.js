@@ -111,6 +111,13 @@ async function iniciarWhatsApp() {
         setTimeout(iniciarWhatsApp, 30_000);
     });
 
+    // Timeout de seguridad: si no inicializa en 120s, algo está mal
+    const initTimeout = setTimeout(() => {
+        if (estadoActual === 'desconectado') {
+            console.error('⌛ clienteWA.initialize() tardando demasiado (120s)...');
+        }
+    }, 120_000);
+
     console.log('🏁 Preparando clienteWA.initialize() en 5 segundos...');
     await new Promise(r => setTimeout(r, 5000));
 
