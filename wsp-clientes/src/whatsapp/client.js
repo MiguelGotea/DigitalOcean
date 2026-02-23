@@ -76,6 +76,10 @@ async function iniciarWhatsApp() {
             clientId: WSP_INSTANCIA,
             dataPath: `.wwebjs_auth_${WSP_INSTANCIA}`
         }),
+        webVersionCache: {
+            type: 'remote',
+            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018911162-alpha.html'
+        },
         puppeteer: {
             headless: true, // Clasico headless (a veces mas estable en VPS)
             executablePath,
@@ -140,15 +144,16 @@ async function iniciarWhatsApp() {
         setTimeout(iniciarWhatsApp, 15_000);
     });
 
-    // Timeout de seguridad: si no inicializa en 240s, algo está mal
+    // Timeout de seguridad: si no inicializa en 300s, algo está mal
     const initTimeout = setTimeout(() => {
         if (estaIniciando && estadoActual === 'desconectado') {
-            logMsg('⌛ clienteWA.initialize() tardando demasiado (240s)...');
+            logMsg('⌛ clienteWA.initialize() tardando demasiado (300s)...');
         }
-    }, 240_000);
+    }, 300_000);
 
-    logMsg('🏁 Preparando clienteWA.initialize() en 10 segundos...');
-    await new Promise(r => setTimeout(r, 10_000));
+    const staggerDelay = WSP_INSTANCIA === 'wsp-crmbot' ? 45_000 : 15_000;
+    logMsg(`🏁 Preparando clienteWA.initialize() en ${staggerDelay / 1000} segundos para evitar saturar RAM...`);
+    await new Promise(r => setTimeout(r, staggerDelay));
 
     try {
         await clienteWA.initialize();
