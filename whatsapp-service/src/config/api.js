@@ -9,10 +9,11 @@ require('dotenv').config();
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://api.batidospitaya.com';
 const WSP_TOKEN = process.env.WSP_TOKEN;
+const WSP_INSTANCIA = process.env.WSP_INSTANCIA || 'wsp-clientes';
 
 if (!WSP_TOKEN) {
     console.error('❌ FATAL: WSP_TOKEN no está definido en .env');
     process.exit(1);
 }
 
-module.exports = { API_BASE_URL, WSP_TOKEN };
+module.exports = { API_BASE_URL, WSP_TOKEN, WSP_INSTANCIA };

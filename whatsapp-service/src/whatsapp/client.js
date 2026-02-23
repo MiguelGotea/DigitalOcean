@@ -112,9 +112,10 @@ async function iniciarWhatsApp() {
 async function reportarEstadoVPS(estado, qr, numero = null) {
     try {
         const axios = require('axios');
-        const { API_BASE_URL, WSP_TOKEN } = require('../config/api');
+        const { API_BASE_URL, WSP_TOKEN, WSP_INSTANCIA } = require('../config/api');
         await axios.post(`${API_BASE_URL}/api/wsp/registrar_sesion.php`, {
             estado,
+            instancia: WSP_INSTANCIA,
             qr_base64: qr || null,
             numero_telefono: numero || null
         }, {

@@ -4,7 +4,7 @@ const cron = require('node-cron');
 const axios = require('axios');
 const { obtenerCliente, resetearSesion } = require('../whatsapp/client');
 const { enviarLote } = require('../whatsapp/sender');
-const { API_BASE_URL, WSP_TOKEN } = require('../config/api');
+const { API_BASE_URL, WSP_TOKEN, WSP_INSTANCIA } = require('../config/api');
 
 // Control anti-ban diario
 let mensajesEnviadosHoy = 0;
@@ -42,6 +42,7 @@ function verificarContadorDiario() {
 async function obtenerPendientes() {
     const resp = await axios.get(`${API_BASE_URL}/api/wsp/pendientes.php`, {
         headers: { 'X-WSP-Token': WSP_TOKEN },
+        params: { instancia: WSP_INSTANCIA },
         timeout: 15_000
     });
     return resp.data; // { campanas: [...], reset_solicitado: bool }
