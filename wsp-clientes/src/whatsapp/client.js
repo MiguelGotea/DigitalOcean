@@ -33,30 +33,36 @@ async function iniciarWhatsApp() {
     }
     console.log('🌐 Usando navegador:', executablePath);
 
-    // Limpiar SingletonLock si existe (de crashes anteriores)
-    // Con LocalAuth y clientId, la ruta es .wwebjs_auth/session-<clientId>/SingletonLock
-    const clientId = require('../config/api').WSP_INSTANCIA;
-    const lockPath = path.join(process.cwd(), '.wwebjs_auth', `session-${clientId}`, 'SingletonLock');
-    if (fs.existsSync(lockPath)) {
-        try {
-            fs.unlinkSync(lockPath);
-            console.log(`🔓 SingletonLock limpiado para ${clientId}`);
-        } catch (e) {
-            console.warn('⚠️  No se pudo limpiar SingletonLock:', e.message);
-        }
-    }
+    // Limpiar SingletonLock si existe (de crashes anteriores o zombies)
+    const cleanupLocks = () => {
+        const clientId = require('../config/api').WSP_INSTANCIA;
+        const paths = [
+            path.join(process.cwd(), '.wwebjs_auth', 'session', 'SingletonLock'),
+            path.join(process.cwd(), '.wwebjs_auth', `session-${clientId}`, 'SingletonLock')
+        ];
+        paths.forEach(p => {
+            if (fs.existsSync(p)) {
+                try {
+                    fs.unlinkSync(p);
+                    console.log(`🔓 SingletonLock eliminado: ${p}`);
+                } catch (e) {
+                    console.warn(`⚠️  Lock ocupado por otro proceso: ${p}`);
+                }
+            }
+        });
+    };
+    cleanupLocks();
 
     clienteWA = new Client({
         authStrategy: new LocalAuth({
             clientId: require('../config/api').WSP_INSTANCIA,
             dataPath: '.wwebjs_auth'
         }),
-        // Cargar siempre la versión más reciente de WhatsApp Web
-        /* 
+        /*
         webVersionCache: {
             type: 'remote',
             remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1015901134-alpha.html'
-        }, 
+        },
         */
         puppeteer: {
             headless: true,
@@ -66,18 +72,9 @@ async function iniciarWhatsApp() {
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
-                '--disable-accelerated-2d-canvas',
                 '--no-first-run',
                 '--disable-extensions',
-                '--disable-background-networking',
-                '--disable-default-apps',
-                '--disable-sync',
-                '--disable-translate',
-                '--metrics-recording-only',
-                '--safebrowsing-disable-auto-update',
-                '--js-flags=--max-old-space-size=256', // Menos RAM
-                '--disable-setuid-sandbox',
-                '--no-zygote'
+                '--js-flags=--max-old-space-size=256'
             ]
         }
     });
@@ -120,14 +117,8 @@ async function iniciarWhatsApp() {
         setTimeout(iniciarWhatsApp, 30_000);
     });
 
-    console.log('🏁 Llamando a clienteWA.initialize()...');
-
-    // Timeout de seguridad: si no inicializa en 60s, algo está mal
-    const initTimeout = setTimeout(() => {
-        if (estadoActual === 'desconectado') {
-            console.error('⌛ clienteWA.initialize() tardando demasiado (60s)...');
-        }
-    }, 60_000);
+    console.log('🏁 Preparando clienteWA.initialize() en 5 segundos...');
+    await new Promise(r => setTimeout(r, 5000));
 
     try {
         await clienteWA.initialize();
@@ -137,7 +128,9 @@ async function iniciarWhatsApp() {
     } catch (err) {
         clearTimeout(initTimeout);
         console.error('❌ Error en clienteWA.initialize():', err.message);
-        throw err;
+        // No lanzamos el error para evitar crash del proceso completo, 
+        // el loop de reintento en app.js se encargará de volver a llamar.
+        return null;
     }
 }
 

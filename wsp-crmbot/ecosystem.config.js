@@ -33,7 +33,8 @@ module.exports = {
       restart_delay: 5000,
       env: {
         NODE_ENV: 'production',
-        PORT: 3001
+        PORT: 3001,
+        WSP_INSTANCIA: 'wsp-clientes'
         // El resto de variables se leen del .env en cada carpeta
       },
       out_file: './logs/out.log',
@@ -79,7 +80,8 @@ module.exports = {
       restart_delay: 5000,
       env: {
         NODE_ENV: 'production',
-        PORT: 3003
+        PORT: 3003,
+        WSP_INSTANCIA: 'wsp-crmbot'
       },
       out_file: './logs/out.log',
       error_file: './logs/error.log',
