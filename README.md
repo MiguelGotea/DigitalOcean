@@ -26,21 +26,18 @@ WhatsApp Web
 ## Estructura del repositorio
 
 ```
-.github/workflows/deploy-whatsapp.yml   # CI/CD: push → rsync al VPS → PM2 reload
-whatsapp-service/
-├── src/
-│   ├── app.js                          # Entry point (Express localhost) + heartbeat
-│   ├── config/api.js                   # URL base + validación WSP_TOKEN
-│   ├── whatsapp/
-│   │   ├── client.js                   # Sesión WA (LocalAuth) + resetearSesion()
-│   │   └── sender.js                   # Envío + anti-ban + imágenes
-│   └── workers/campaign_worker.js      # Cron 60s → polling → envío + reset
-├── scripts/
+.github/workflows/deploy-vps.yml        # CI/CD: push → rsync al VPS → PM2 reload
+wsp-clientes/                           # Código instancia Marketing
+├── src/                                # Lógica del bot (Express + Workers)
+├── scripts/                            # SCRIPTS DE AUTOMATIZACIÓN
 │   ├── setup.sh                        # Instalación VPS Ubuntu desde cero
-│   ├── nuevo_numero_wsp.sh             # Deploy de una nueva instancia en el VPS
+│   ├── nuevo_numero_wsp.sh             # Desplegar nueva instancia en segundos
 │   └── test_api_connection.js          # Verifica conectividad VPS → API
-├── ecosystem.config.js                 # PM2 multi-instancia (una por número WA)
-└── .env.example                        # Variables requeridas por instancia
+├── .env.example                        # Variables requeridas
+└── package.json
+wsp-crmbot/                             # Código instancia Bot CRM
+├── src/
+└── ... (estructura idéntica a wsp-clientes)
 ```
 
 ### Estructura en el VPS (Opción A — múltiples instancias)
@@ -219,24 +216,22 @@ pm2 delete wsp-rrhh                 # Eliminar instancia de PM2
 
 ## Setup inicial VPS
 
+Para configurar un servidor nuevo desde cero (Ubuntu 22.04+):
+
 ```bash
 ssh root@<IP_DROPLET>
 
-# 1. Instalar Chrome (NO usar snap en Ubuntu 24)
-wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-apt install -y /tmp/chrome.deb
+# 1. Correr el script de automatización
+# Este script instala Chrome, Node.js 20, PM2, dependencias y configura Firewall/Swap
+bash /var/www/wsp-clientes/scripts/setup.sh
 
-# 2. Crear swap (obligatorio en Droplet 1GB)
-fallocate -l 2G /swapfile && chmod 600 /swapfile
-mkswap /swapfile && swapon /swapfile
-echo '/swapfile none swap sw 0 0' >> /etc/fstab
-
-# 3. Crear .env
+# 2. Configurar variables de entorno (.env)
+cd /var/www/wsp-clientes
 cp .env.example .env && nano .env   # llenar WSP_TOKEN
 
-# 4. Instalar deps y arrancar
+# 3. Arrancar producción
 npm install --production
-pm2 start ecosystem.config.js
+pm2 start src/app.js --name wsp-clientes
 pm2 save && pm2 startup
 ```
 
