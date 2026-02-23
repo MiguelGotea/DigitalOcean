@@ -74,10 +74,11 @@ async function iniciarWhatsApp() {
     });
 
     clienteWA.on('ready', async () => {
-        console.log('✅ WhatsApp Web conectado y listo');
+        const numero = clienteWA.info?.wid?.user || null;
+        console.log(`✅ WhatsApp Web conectado y listo — Número: ${numero || 'desconocido'}`);
         estadoActual = 'conectado';
         qrBase64 = null;
-        await reportarEstadoVPS('conectado', null);
+        await reportarEstadoVPS('conectado', null, numero);
     });
 
     clienteWA.on('authenticated', () => {
@@ -104,14 +105,18 @@ async function iniciarWhatsApp() {
 
 /**
  * Notifica a la API el estado actual del VPS/WhatsApp
+ * @param {string} estado - conectado|qr_pendiente|desconectado
+ * @param {string|null} qr - QR en base64 (solo cuando qr_pendiente)
+ * @param {string|null} numero - Número WhatsApp vinculado (solo cuando conectado)
  */
-async function reportarEstadoVPS(estado, qr) {
+async function reportarEstadoVPS(estado, qr, numero = null) {
     try {
         const axios = require('axios');
         const { API_BASE_URL, WSP_TOKEN } = require('../config/api');
         await axios.post(`${API_BASE_URL}/api/wsp/registrar_sesion.php`, {
             estado,
-            qr_base64: qr || null
+            qr_base64: qr || null,
+            numero_telefono: numero || null
         }, {
             headers: { 'X-WSP-Token': WSP_TOKEN },
             timeout: 10_000
