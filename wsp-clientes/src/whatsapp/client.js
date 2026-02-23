@@ -50,10 +50,12 @@ async function iniciarWhatsApp() {
             dataPath: '.wwebjs_auth'
         }),
         // Cargar siempre la versión más reciente de WhatsApp Web
+        /* 
         webVersionCache: {
             type: 'remote',
             remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1015901134-alpha.html'
-        },
+        }, 
+        */
         puppeteer: {
             headless: true,
             executablePath,
@@ -127,6 +129,7 @@ async function iniciarWhatsApp() {
         await clienteWA.initialize();
         clearTimeout(initTimeout);
         console.log('🚀 clienteWA.initialize() completado');
+        return clienteWA;
     } catch (err) {
         clearTimeout(initTimeout);
         console.error('❌ Error en clienteWA.initialize():', err.message);
