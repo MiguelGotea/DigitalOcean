@@ -32,6 +32,8 @@ async function iniciarWhatsApp() {
 
     logMsg('📱 Iniciando cliente WhatsApp Web...');
     estaIniciando = true;
+    estadoActual = 'inicializando';
+    await reportarEstadoVPS('inicializando', null);
 
     // Detectar ejecutable de Chromium/Chrome disponible
     const fs = require('fs');
@@ -251,8 +253,9 @@ async function resetearSesion() {
     // 3. Matar procesos de Chrome huérfanos residuo de esta instancia
     try {
         const { execSync } = require('child_process');
-        logMsg('🧹 Intentando limpiar procesos Chrome huérfanos...');
-        // execSync(`pkill -f ".wwebjs_auth_${WSP_INSTANCIA}" || true`);
+        const { WSP_INSTANCIA } = require('../config/api');
+        logMsg(`🧹 Limpiando procesos Chrome de ${WSP_INSTANCIA}...`);
+        execSync(`pkill -9 -f ".wwebjs_auth_${WSP_INSTANCIA}" || true`);
     } catch (e) { }
 
     // 4. Actualizar estado y re-notificar
