@@ -87,17 +87,8 @@ async function ejecutarCiclo() {
 
     try {
         ejecutandoCicloFlag = true;
-        // Siempre consultar pendientes primero (incluye flag de reset)
+        // Consultar campañas pendientes
         const data = await obtenerPendientes();
-
-        // ── Cambio de número: reset de sesión solicitado desde el ERP ──
-        if (data.reset_solicitado) {
-            console.log('🔄 Reset de sesión WhatsApp solicitado desde el ERP — ejecutando...');
-            await resetearSesion();
-            console.log('✅ Sesión reiniciada. Generando nuevo QR...');
-            ejecutandoCicloFlag = false;
-            return; // Esperar hasta que el nuevo número escanee el QR
-        }
 
         const client = obtenerCliente();
 

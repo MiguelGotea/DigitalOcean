@@ -120,8 +120,13 @@ async function arrancar() {
     setInterval(async () => {
         try {
             const estado = obtenerEstadoActual();
-            await reportarEstadoVPS(estado, null);
+            const data = await reportarEstadoVPS(estado, null);
             logApp(`💓 Heartbeat [${WSP_INSTANCIA}] — estado: ${estado}`);
+
+            if (data && data.reset_solicitado) {
+                logApp('🔄 Detectada solicitud de reset en heartbeat — ejecutando...');
+                await resetearSesion();
+            }
         } catch (e) {
             logApp(`⚠️  Heartbeat falló: ${e.message}`);
         }

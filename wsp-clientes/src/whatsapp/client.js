@@ -177,7 +177,7 @@ async function reportarEstadoVPS(estado, qr, numero = null) {
     try {
         const axios = require('axios');
         const { API_BASE_URL, WSP_TOKEN, WSP_INSTANCIA } = require('../config/api');
-        await axios.post(`${API_BASE_URL}/api/wsp/registrar_sesion.php`, {
+        const resp = await axios.post(`${API_BASE_URL}/api/wsp/registrar_sesion.php`, {
             estado,
             instancia: WSP_INSTANCIA,
             qr_base64: qr || null,
@@ -186,8 +186,10 @@ async function reportarEstadoVPS(estado, qr, numero = null) {
             headers: { 'X-WSP-Token': WSP_TOKEN },
             timeout: 10_000
         });
+        return resp.data;
     } catch (err) {
         logMsg(`⚠️  No se pudo reportar estado a la API: ${err.message}`);
+        return null;
     }
 }
 
