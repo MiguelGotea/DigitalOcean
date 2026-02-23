@@ -134,4 +134,39 @@ function obtenerEstadoActual() { return estadoActual; }
 function obtenerQR() { return qrBase64; }
 function obtenerCliente() { return clienteWA; }
 
-module.exports = { iniciarWhatsApp, obtenerEstado, obtenerQR, obtenerCliente, reportarEstadoVPS, obtenerEstadoActual };
+/**
+ * Reinicia completamente la sesión WhatsApp (para cambio de número)
+ * Destruye el cliente actual, borra .wwebjs_auth y re-inicializa (genera nuevo QR)
+ */
+async function resetearSesion() {
+    console.log('🔄 Iniciando reset de sesión WhatsApp...');
+
+    // 1. Destruir cliente actual
+    if (clienteWA) {
+        try {
+            await clienteWA.destroy();
+        } catch (e) {
+            console.warn('⚠️  Al destruir cliente:', e.message);
+        }
+        clienteWA = null;
+    }
+
+    // 2. Borrar la carpeta de sesión local
+    const fs = require('fs');
+    const path = require('path');
+    const authPath = path.resolve('.wwebjs_auth');
+    if (fs.existsSync(authPath)) {
+        fs.rmSync(authPath, { recursive: true, force: true });
+        console.log('🗑️  Carpeta .wwebjs_auth eliminada');
+    }
+
+    // 3. Actualizar estado
+    estadoActual = 'desconectado';
+    qrBase64 = null;
+    await reportarEstadoVPS('desconectado', null);
+
+    // 4. Re-inicializar (aparecerá el QR nuevo después de ~10s)
+    setTimeout(iniciarWhatsApp, 3_000);
+}
+
+module.exports = { iniciarWhatsApp, obtenerEstado, obtenerQR, obtenerCliente, reportarEstadoVPS, obtenerEstadoActual, resetearSesion };

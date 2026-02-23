@@ -2,7 +2,7 @@
 
 const cron = require('node-cron');
 const axios = require('axios');
-const { obtenerCliente } = require('../whatsapp/client');
+const { obtenerCliente, resetearSesion } = require('../whatsapp/client');
 const { enviarLote } = require('../whatsapp/sender');
 const { API_BASE_URL, WSP_TOKEN } = require('../config/api');
 
@@ -17,7 +17,7 @@ const MAX_HORA = parseInt(process.env.MAX_MENSAJES_POR_HORA) || 50;
  */
 function enHorarioPermitido() {
     const ahora = new Date();
-    const hora = ahora.getHours(); // hora local del VPS (debe estar en UTC-6)
+    const hora = ahora.getHours();
     const [hI] = (process.env.HORA_INICIO_ENVIO || '08:00').split(':').map(Number);
     const [hF] = (process.env.HORA_FIN_ENVIO || '20:00').split(':').map(Number);
     return hora >= hI && hora < hF;
@@ -37,13 +37,14 @@ function verificarContadorDiario() {
 
 /**
  * Obtiene campañas pendientes desde api.batidospitaya.com
+ * La respuesta también incluye reset_solicitado para detectar cambio de número
  */
 async function obtenerPendientes() {
     const resp = await axios.get(`${API_BASE_URL}/api/wsp/pendientes.php`, {
         headers: { 'X-WSP-Token': WSP_TOKEN },
         timeout: 15_000
     });
-    return resp.data; // { campanas: [...] }
+    return resp.data; // { campanas: [...], reset_solicitado: bool }
 }
 
 /**
@@ -72,6 +73,17 @@ async function reportarResultado(campanaId, destinatarioId, resultado, detalle) 
  */
 async function ejecutarCiclo() {
     try {
+        // Siempre consultar pendientes primero (incluye flag de reset)
+        const data = await obtenerPendientes();
+
+        // ── Cambio de número: reset de sesión solicitado desde el ERP ──
+        if (data.reset_solicitado) {
+            console.log('🔄 Reset de sesión WhatsApp solicitado desde el ERP — ejecutando...');
+            await resetearSesion();
+            console.log('✅ Sesión reiniciada. Generando nuevo QR...');
+            return; // Esperar hasta que el nuevo número escanee el QR
+        }
+
         const client = obtenerCliente();
 
         // Verificar que WhatsApp está conectado
@@ -90,8 +102,6 @@ async function ejecutarCiclo() {
             return;
         }
 
-        // Obtener campañas listas para enviar
-        const data = await obtenerPendientes();
         if (!data.campanas || data.campanas.length === 0) {
             return; // Sin campañas pendientes
         }
@@ -101,8 +111,7 @@ async function ejecutarCiclo() {
         for (const campana of data.campanas) {
             if (!campana.destinatarios || campana.destinatarios.length === 0) continue;
 
-            // Limitar el lote por hora
-            const espacioDisponible = MAX_HORA - 0; // simplificado
+            const espacioDisponible = MAX_HORA - 0;
             const lote = campana.destinatarios.slice(0, Math.min(espacioDisponible, campana.destinatarios.length));
 
             await enviarLote(client, campana, lote, reportarResultado);
@@ -122,7 +131,7 @@ async function ejecutarCiclo() {
  */
 function iniciarWorker() {
     console.log('⏰ Worker de campañas iniciado (cada 60 segundos)');
-    cron.schedule('*/1 * * * *', ejecutarCiclo);  // cada 1 minuto
+    cron.schedule('*/1 * * * *', ejecutarCiclo);
 }
 
 module.exports = { iniciarWorker };
