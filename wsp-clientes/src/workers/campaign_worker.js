@@ -73,11 +73,20 @@ async function reportarResultado(campanaId, destinatarioId, resultado, detalle) 
     }
 }
 
+// Flag para evitar ejecuciones superpuestas
+let ejecutandoCicloFlag = false;
+
 /**
  * Ciclo principal del worker — se ejecuta cada 60 segundos
  */
 async function ejecutarCiclo() {
+    if (ejecutandoCicloFlag) {
+        console.log('⏳ Ciclo de worker ya en curso, saltando...');
+        return;
+    }
+
     try {
+        ejecutandoCicloFlag = true;
         // Siempre consultar pendientes primero (incluye flag de reset)
         const data = await obtenerPendientes();
 
@@ -86,6 +95,7 @@ async function ejecutarCiclo() {
             console.log('🔄 Reset de sesión WhatsApp solicitado desde el ERP — ejecutando...');
             await resetearSesion();
             console.log('✅ Sesión reiniciada. Generando nuevo QR...');
+            ejecutandoCicloFlag = false;
             return; // Esperar hasta que el nuevo número escanee el QR
         }
 
@@ -93,6 +103,7 @@ async function ejecutarCiclo() {
 
         // Verificar que WhatsApp está conectado
         if (!client || client.info === undefined) {
+            ejecutandoCicloFlag = false;
             return; // No conectado, esperar
         }
 
@@ -100,14 +111,17 @@ async function ejecutarCiclo() {
         verificarContadorDiario();
         if (!enHorarioPermitido()) {
             console.log('🌙 Fuera del horario de envío. Esperando...');
+            ejecutandoCicloFlag = false;
             return;
         }
         if (mensajesEnviadosHoy >= MAX_DIA) {
             console.log(`⚠️  Límite diario alcanzado (${MAX_DIA}). Reiniciará mañana.`);
+            ejecutandoCicloFlag = false;
             return;
         }
 
         if (!data.campanas || data.campanas.length === 0) {
+            ejecutandoCicloFlag = false;
             return; // Sin campañas pendientes
         }
 
@@ -128,6 +142,8 @@ async function ejecutarCiclo() {
         } else {
             console.error('❌ Error en el worker:', err.message);
         }
+    } finally {
+        ejecutandoCicloFlag = false;
     }
 }
 
