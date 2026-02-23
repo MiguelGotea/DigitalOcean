@@ -27,6 +27,7 @@ module.exports = {
       cwd: '/var/www/wsp-clientes',   // ruta en el VPS
       watch: false,
       instances: 1,
+      exec_mode: 'fork',
       autorestart: true,
       max_restarts: 10,
       restart_delay: 5000,
@@ -72,6 +73,7 @@ module.exports = {
       cwd: '/var/www/wsp-crmbot',
       watch: false,
       instances: 1,
+      exec_mode: 'fork',
       autorestart: true,
       max_restarts: 10,
       restart_delay: 5000,

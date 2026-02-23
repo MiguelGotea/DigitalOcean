@@ -7,7 +7,7 @@
  * Instancias activas:
  *   wsp-clientes  → Puerto 3001 → Campañas de marketing a clientesclub
  *   wsp-crmbot    → Puerto 3003 → Bot CRM híbrido (keywords + TF-IDF + Naive Bayes)
- *
+ * 
  * Para agregar un número nuevo, copiar el bloque y cambiar:
  *   - name          → nombre único del proceso PM2
  *   - cwd           → ruta de la nueva instancia en el VPS
@@ -27,6 +27,7 @@ module.exports = {
       cwd: '/var/www/wsp-clientes',   // ruta en el VPS
       watch: false,
       instances: 1,
+      exec_mode: 'fork',
       autorestart: true,
       max_restarts: 10,
       restart_delay: 5000,
@@ -72,6 +73,7 @@ module.exports = {
       cwd: '/var/www/wsp-crmbot',
       watch: false,
       instances: 1,
+      exec_mode: 'fork',
       autorestart: true,
       max_restarts: 10,
       restart_delay: 5000,

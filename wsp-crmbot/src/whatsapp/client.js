@@ -46,6 +46,7 @@ async function iniciarWhatsApp() {
 
     clienteWA = new Client({
         authStrategy: new LocalAuth({
+            clientId: require('../config/api').WSP_INSTANCIA,
             dataPath: '.wwebjs_auth'
         }),
         // Cargar siempre la versión más reciente de WhatsApp Web
