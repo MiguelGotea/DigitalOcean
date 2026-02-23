@@ -43,9 +43,10 @@ async function iniciarWhatsApp() {
     const path = require('path');
 
     const chromiumPaths = [
-        '/usr/bin/google-chrome-stable',    // Chrome estable (preferido)
-        '/usr/bin/google-chrome',           // Chrome genérico
-        '/usr/bin/chromium',                // apt en Ubuntu sin snap
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/opt/google/chrome/chrome',       // Alternativa en algunos sistemas
+        '/usr/bin/chromium',
     ];
     const executablePath = chromiumPaths.find(p => fs.existsSync(p));
     if (!executablePath) {
@@ -86,7 +87,7 @@ async function iniciarWhatsApp() {
             remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018911162-alpha.html'
         }, */
         puppeteer: {
-            headless: true, // Clasico headless (a veces mas estable en VPS)
+            headless: 'new',
             executablePath,
             dumpio: true,
             args: [
@@ -97,18 +98,7 @@ async function iniciarWhatsApp() {
                 '--no-zygote',
                 '--no-first-run',
                 '--disable-extensions',
-                '--disable-background-networking',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-breakpad',
-                '--disable-component-update',
-                '--disable-domain-reliability',
-                '--disable-sync',
-                '--disable-translate',
-                '--metrics-recording-only',
-                '--mute-audio',
-                '--no-default-browser-check',
-                '--disable-features=IsolateOrigins,site-per-process,AudioServiceOutOfProcess'
+                '--disable-background-networking'
             ]
         }
     });
