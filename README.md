@@ -318,3 +318,77 @@ pm2 start whatsapp-service
 curl -s "https://raw.githubusercontent.com/MiguelGotea/DigitalOcean/main/whatsapp-service/src/app.js" \
      -o /var/www/whatsapp-service/src/app.js
 ```
+
+---
+
+## Cambio de Número WhatsApp
+
+### ¿Cuándo se necesita?
+
+Cuando se quiere vincular un número diferente al que está actualmente escaneado en el VPS (por ejemplo, pasar del número de prueba al número real del negocio).
+
+### Flujo completo
+
+```
+ERP: clic en "🔄 Cambiar Número"
+    ↓ (SweetAlert confirma)
+ERP AJAX: campanas_wsp_reset_sesion.php
+    ↓ escribe reset_solicitado = 1 en wsp_sesion_vps_
+ERP Badge: cambia inmediatamente a "🔄 Pendiente de cambio de número..." (naranja girando)
+    ↓ espera 65s
+VPS Worker: próximo ciclo detecta reset_solicitado = true en pendientes.php
+    ↓ llama resetearSesion()
+VPS: client.destroy() → rm -rf .wwebjs_auth → setTimeout(iniciarWhatsApp, 3s)
+    ↓ genera nuevo QR (~10s después)
+ERP: verificarQR() abre el modal QR automáticamente
+    ↓ usuario escanea con el nuevo número
+ERP Badge: cambia a "✅ WhatsApp Conectado" (verde)
+```
+
+### Archivos involucrados
+
+| Archivo | Rol |
+|---------|-----|
+| `erp/.../campanas_wsp.php` | Botón "Cambiar Número" + `confirmarResetSesion()` JS |
+| `erp/.../ajax/campanas_wsp_reset_sesion.php` | Escribe `reset_solicitado = 1` en la BD |
+| `api/.../pendientes.php` | Devuelve `reset_solicitado` flag al VPS y lo limpia a 0 |
+| `whatsapp-service/workers/campaign_worker.js` | Detecta el flag y llama `resetearSesion()` |
+| `whatsapp-service/whatsapp/client.js` | `resetearSesion()`: destruye cliente, borra `.wwebjs_auth`, reinicia |
+
+### SQL requerido (solo la primera vez)
+
+```sql
+-- Agregar columna de flag reset en BD
+ALTER TABLE wsp_sesion_vps_
+    ADD COLUMN reset_solicitado TINYINT(1) NOT NULL DEFAULT 0;
+
+-- Asignar permiso al cargo del usuario autorizado
+-- Primero consultar el cargo: SELECT CodOperario, CodNivelesCargos FROM Operarios WHERE Nombre = 'NOMBRE';
+INSERT INTO tools_erp (nombre_tool, accion, CodNivelesCargos, permitido)
+VALUES ('campanas_wsp', 'resetear_sesion', <<CODIGO_CARGO>>, 1)
+ON DUPLICATE KEY UPDATE permitido = 1;
+```
+
+### Estados del badge en el ERP
+
+| Estado | Color | Significado |
+|--------|-------|-------------|
+| `conectado` | 🟢 Verde | WhatsApp vinculado y listo |
+| `qr_pendiente` | 🟡 Amarillo | Esperando escaneo de QR |
+| `reset_pendiente` | 🟠 Naranja (gira) | Reset solicitado, VPS procesando |
+| `desconectado` | 🔴 Rojo | VPS caído o sin heartbeat |
+
+### Troubleshooting
+
+**El badge se queda en "reset_pendiente" más de 2 minutos:**
+1. Verificar que el VPS tiene la columna `reset_solicitado` en la BD
+2. Verificar que `pendientes.php` está siendo llamado por el worker (revisar logs: `pm2 logs whatsapp-service --lines 30`)
+3. Verificar que `campaign_worker.js` importa `resetearSesion` de `client.js`
+
+**No aparece el botón "Cambiar Número":**
+- El permiso `resetear_sesion` no está asignado al cargo del usuario
+- Correr el SQL de inserción del permiso con el `CodNivelesCargos` correcto
+
+**El QR no aparece después de los 65s:**
+- El VPS necesita ~10-15s adicionales para que Chrome cargue y genere el QR
+- Hacer clic en el badge (llama `verificarQR()` manualmente) si el modal no abre solo
