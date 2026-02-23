@@ -89,28 +89,14 @@ async function iniciarWhatsApp() {
             clientId: WSP_INSTANCIA,
             dataPath: `.wwebjs_auth_${WSP_INSTANCIA}`
         }),
-        webVersionCache: {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018911162-alpha.html'
-        },
         puppeteer: {
             headless: 'new',
             executablePath,
-            dumpio: true,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--no-zygote',
-                '--no-first-run',
-                '--disable-extensions',
-                '--disable-background-networking',
-                '--disable-default-apps',
-                '--disable-setuid-sandbox',
-                '--disable-sync',
-                '--no-default-browser-check',
-                '--test-type'
+                '--disable-gpu'
             ]
         }
     });
