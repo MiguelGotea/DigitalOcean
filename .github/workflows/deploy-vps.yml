@@ -17,9 +17,8 @@ jobs:
       with:
         ssh-private-key: ${{ secrets.DO_SSH_KEY }}
 
-    - name: 📤 Sincronizar whatsapp-service (código fuente compartido)
+    - name: 📤 Deploy wsp-clientes → /var/www/wsp-clientes/
       run: |
-        echo "🔄 Sincronizando whatsapp-service → /var/www/whatsapp-service/"
         rsync -avz \
           --exclude='.git/' \
           --exclude='.github/' \
@@ -32,66 +31,39 @@ jobs:
           --exclude='logs/' \
           --exclude='.env' \
           -e "ssh -o StrictHostKeyChecking=no" \
-          ./whatsapp-service/ \
-          ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/var/www/whatsapp-service/
-
-    - name: 📤 Sincronizar wsp-clientes (config instancia)
-      run: |
-        echo "🔄 Sincronizando wsp-clientes → /var/www/wsp-clientes/"
-        rsync -avz \
-          --exclude='.env' \
-          --exclude='auth/' \
-          --exclude='node_modules/' \
-          --exclude='logs/' \
-          -e "ssh -o StrictHostKeyChecking=no" \
           ./wsp-clientes/ \
           ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/var/www/wsp-clientes/
 
-    - name: 📤 Sincronizar wsp-crmbot (config instancia)
+    - name: 📤 Deploy wsp-crmbot → /var/www/wsp-crmbot/
       run: |
-        echo "🔄 Sincronizando wsp-crmbot → /var/www/wsp-crmbot/"
         rsync -avz \
-          --exclude='.env' \
-          --exclude='auth/' \
+          --exclude='.git/' \
+          --exclude='.github/' \
+          --exclude='.scripts/' \
+          --exclude='.agent/' \
+          --exclude='.gemini/' \
+          --exclude='.gitignore' \
           --exclude='node_modules/' \
+          --exclude='auth/' \
           --exclude='logs/' \
+          --exclude='.env' \
           -e "ssh -o StrictHostKeyChecking=no" \
           ./wsp-crmbot/ \
           ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/var/www/wsp-crmbot/
 
-    - name: 🔧 Propagar código fuente a instancias y reiniciar PM2
+    - name: 🔁 Reiniciar instancias PM2
       run: |
         ssh -o StrictHostKeyChecking=no ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} << 'EOF'
-          set -e
-
-          propagar() {
-            local INST=$1
-            echo "📦 Propagando código fuente → /var/www/${INST}/"
-            rsync -a \
-              --exclude='node_modules/' \
-              --exclude='auth/' \
-              --exclude='.env' \
-              --exclude='logs/' \
-              /var/www/whatsapp-service/ \
-              /var/www/${INST}/
-            echo "✅ ${INST} actualizado"
-          }
-
-          propagar wsp-clientes
-          propagar wsp-crmbot
-
-          echo "🔁 Reiniciando PM2..."
           pm2 restart wsp-clientes
           pm2 restart wsp-crmbot
           pm2 save
-
           echo "---"
           pm2 list
         EOF
 
-    - name: ✅ Verificar deploy
+    - name: ✅ Deploy completado
       run: |
-        echo "✅ Deploy completado"
+        echo "✅ Deploy completado exitosamente"
+        echo "📁 wsp-clientes → /var/www/wsp-clientes/"
+        echo "📁 wsp-crmbot   → /var/www/wsp-crmbot/"
         echo "🌐 VPS: ${{ secrets.DO_HOST }}"
-        echo "📁 wsp-clientes  → /var/www/wsp-clientes/"
-        echo "📁 wsp-crmbot    → /var/www/wsp-crmbot/"
