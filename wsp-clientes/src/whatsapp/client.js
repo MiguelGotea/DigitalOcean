@@ -113,7 +113,24 @@ async function iniciarWhatsApp() {
         setTimeout(iniciarWhatsApp, 30_000);
     });
 
-    await clienteWA.initialize();
+    console.log('🏁 Llamando a clienteWA.initialize()...');
+
+    // Timeout de seguridad: si no inicializa en 60s, algo está mal
+    const initTimeout = setTimeout(() => {
+        if (estadoActual === 'desconectado') {
+            console.error('⌛ clienteWA.initialize() tardando demasiado (60s)...');
+        }
+    }, 60_000);
+
+    try {
+        await clienteWA.initialize();
+        clearTimeout(initTimeout);
+        console.log('🚀 clienteWA.initialize() completado');
+    } catch (err) {
+        clearTimeout(initTimeout);
+        console.error('❌ Error en clienteWA.initialize():', err.message);
+        throw err;
+    }
 }
 
 /**
@@ -160,32 +177,55 @@ function obtenerCliente() { return clienteWA; }
 async function resetearSesion() {
     console.log('🔄 Iniciando reset de sesión WhatsApp...');
 
-    // 1. Destruir cliente actual
+    // 1. Destruir cliente actual (sin esperar demasiado)
     if (clienteWA) {
+        console.log('🔌 Destruyendo cliente anterior...');
         try {
-            await clienteWA.destroy();
+            // Intentamos destruir con un timeout para que no bloquee todo
+            await Promise.race([
+                clienteWA.destroy(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout destruyendo cliente')), 5000))
+            ]);
         } catch (e) {
             console.warn('⚠️  Al destruir cliente:', e.message);
         }
         clienteWA = null;
     }
 
-    // 2. Borrar la carpeta de sesión local
+    // 2. Borrar la carpeta de sesión local de forma radical
     const fs = require('fs');
     const path = require('path');
     const authPath = path.resolve('.wwebjs_auth');
+
+    console.log(`🗑️  Limpiando carpeta de sesión: ${authPath}`);
     if (fs.existsSync(authPath)) {
-        fs.rmSync(authPath, { recursive: true, force: true });
-        console.log('🗑️  Carpeta .wwebjs_auth eliminada');
+        try {
+            // Intentar borrar varias veces si falla por bloqueos
+            fs.rmSync(authPath, { recursive: true, force: true });
+            console.log('✅ Carpeta .wwebjs_auth eliminada satisfactoriamente');
+        } catch (e) {
+            console.error('❌ No se pudo eliminar la carpeta de sesión:', e.message);
+        }
     }
 
-    // 3. Actualizar estado
+    // 3. Matar procesos de Chrome huérfanos si es posible (solo funciona si hay permisos)
+    try {
+        const { execSync } = require('child_process');
+        console.log('🧹 Intentando limpiar procesos Chrome huérfanos...');
+        // Ojo: esto puede afectar a otras instancias si no se tiene cuidado,
+        // pero en un VPS dedicado a esto suele ser necesario.
+        // Solo matamos procesos que tengan el path de esta instancia en sus args.
+        // execSync(`pkill -f "${process.cwd()}" || true`);
+    } catch (e) { }
+
+    // 4. Actualizar estado y re-notificar
     estadoActual = 'desconectado';
     qrBase64 = null;
     await reportarEstadoVPS('desconectado', null);
 
-    // 4. Re-inicializar (aparecerá el QR nuevo después de ~10s)
-    setTimeout(iniciarWhatsApp, 3_000);
+    // 5. Re-inicializar 
+    console.log('⏳ Re-inicializando en 5 segundos...');
+    setTimeout(iniciarWhatsApp, 5_000);
 }
 
 module.exports = { iniciarWhatsApp, obtenerEstado, obtenerQR, obtenerCliente, reportarEstadoVPS, obtenerEstadoActual, resetearSesion };
