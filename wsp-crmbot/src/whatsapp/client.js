@@ -56,23 +56,30 @@ async function iniciarWhatsApp() {
     }
     logMsg(`🌐 Usando navegador: ${executablePath}`);
 
-    // Limpiar SingletonLock si existe
+    // Limpiar SingletonLock si existe recursivamente
     const cleanupLocks = () => {
         const { WSP_INSTANCIA } = require('../config/api');
-        const paths = [
-            path.join(process.cwd(), `.wwebjs_auth_${WSP_INSTANCIA}`, `session-${WSP_INSTANCIA}`, 'SingletonLock'),
-            path.join(process.cwd(), '.wwebjs_auth', 'session', 'SingletonLock')
-        ];
-        paths.forEach(p => {
-            if (fs.existsSync(p)) {
-                try {
-                    fs.unlinkSync(p);
-                    logMsg(`🔓 SingletonLock eliminado: ${p}`);
-                } catch (e) {
-                    logMsg(`⚠️  Lock ocupado: ${p}`);
+        const authPath = path.resolve(`.wwebjs_auth_${WSP_INSTANCIA}`);
+        if (!fs.existsSync(authPath)) return;
+
+        logMsg(`🧹 [ID:${currentInitId}] Buscando bloqueos en ${authPath}...`);
+        const findAndRemoveLocks = (dir) => {
+            const files = fs.readdirSync(dir);
+            files.forEach(file => {
+                const fullPath = path.join(dir, file);
+                if (fs.statSync(fullPath).isDirectory()) {
+                    findAndRemoveLocks(fullPath);
+                } else if (file === 'SingletonLock') {
+                    try {
+                        fs.unlinkSync(fullPath);
+                        logMsg(`🔓 [ID:${currentInitId}] SingletonLock eliminado: ${fullPath}`);
+                    } catch (e) {
+                        logMsg(`⚠️  [ID:${currentInitId}] No se pudo borrar lock: ${fullPath}`);
+                    }
                 }
-            }
-        });
+            });
+        };
+        try { findAndRemoveLocks(authPath); } catch (e) { }
     };
     cleanupLocks();
 
@@ -82,12 +89,12 @@ async function iniciarWhatsApp() {
             clientId: WSP_INSTANCIA,
             dataPath: `.wwebjs_auth_${WSP_INSTANCIA}`
         }),
-        /* webVersionCache: {
+        webVersionCache: {
             type: 'remote',
             remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018911162-alpha.html'
-        }, */
+        },
         puppeteer: {
-            headless: 'new',
+            headless: true, // Volvemos al clásico para comparar
             executablePath,
             dumpio: true,
             args: [
@@ -154,8 +161,8 @@ async function iniciarWhatsApp() {
         }
     }, 600_000);
 
-    const staggerDelay = WSP_INSTANCIA === 'wsp-crmbot' ? 45_000 : 15_000;
-    logMsg(`🏁 [ID:${currentInitId}] Preparando clienteWA.initialize() en ${staggerDelay / 1000} segundos para evitar saturar RAM...`);
+    const staggerDelay = 10_000;
+    logMsg(`🏁 [ID:${currentInitId}] Preparando clienteWA.initialize() en ${staggerDelay / 1000} segundos...`);
     await new Promise(r => setTimeout(r, staggerDelay));
 
     // VERIFICAR QUE NO HAYA HABIDO UN RESET EN EL INTERIN
