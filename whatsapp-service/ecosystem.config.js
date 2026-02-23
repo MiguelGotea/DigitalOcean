@@ -62,5 +62,27 @@ module.exports = {
     //   merge_logs:      true
     // },
 
+    // ── Instancia 3 (FUTURA): CRM Bot ─────────────────────────────────────
+    // Bot inteligente para responder mensajes entrantes y gestionar chats.
+    //
+    // {
+    //   name:          'wsp-crmbot',
+    //   script:        'src/app.js',
+    //   cwd:           '/var/www/wsp-crmbot',
+    //   watch:         false,
+    //   instances:     1,
+    //   autorestart:   true,
+    //   max_restarts:  10,
+    //   restart_delay: 5000,
+    //   env: {
+    //     NODE_ENV: 'production',
+    //     PORT:     3003
+    //   },
+    //   out_file:        './logs/out.log',
+    //   error_file:      './logs/error.log',
+    //   log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    //   merge_logs:      true
+    // },
+
   ]
 };

@@ -51,9 +51,9 @@ jobs:
         echo "🔄 Recargando servicio PM2..."
         ssh -o StrictHostKeyChecking=no ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} << 'EOF'
           cd ${{ secrets.DO_PATH }}
-          # Si ya existe el proceso PM2, recargarlo; si no, iniciarlo
-          pm2 describe whatsapp-service > /dev/null 2>&1 \
-            && pm2 reload ecosystem.config.js --update-env \
+          # Recargar todas las instancias definidas en ecosystem.config.js
+          # Si ya existen los procesos PM2, recargarlos; si no, iniciarlos
+          pm2 reload ecosystem.config.js --update-env 2>/dev/null \
             || pm2 start ecosystem.config.js
           pm2 save
         EOF
