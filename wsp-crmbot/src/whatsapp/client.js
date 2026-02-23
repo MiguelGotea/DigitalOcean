@@ -77,8 +77,7 @@ async function iniciarWhatsApp() {
                 '--safebrowsing-disable-auto-update',
                 '--js-flags=--max-old-space-size=256', // Menos RAM
                 '--disable-setuid-sandbox',
-                '--no-zygote',
-                '--single-process' // Útil para ahorrar memoria en VPS pequeños
+                '--no-zygote'
             ]
         }
     });
