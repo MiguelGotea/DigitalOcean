@@ -4,11 +4,10 @@ const fs = require('fs');
 console.log('🚀 Starting minimal WPP test...');
 
 const client = new Client({
-    authStrategy: new LocalAuth({ clientId: 'debug_test' }),
     puppeteer: {
         headless: 'new',
         executablePath: '/usr/bin/google-chrome-stable',
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu']
     }
 });
 
