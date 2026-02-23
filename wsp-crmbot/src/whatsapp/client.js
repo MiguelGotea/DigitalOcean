@@ -4,10 +4,16 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 
 // Estado interno del cliente
-let estadoActual = 'desconectado';   // desconectado | qr_pendiente | conectado
-let estaIniciando = false;           // Bloqueo para evitar llamadas concurrentes
+let estadoActual = 'desconectado';
+let estaIniciando = false;
 let qrBase64 = null;
 let clienteWA = null;
+
+const logMsg = (msg) => {
+    const pid = process.pid;
+    const ut = Math.round(process.uptime());
+    console.log(`[PID:${pid}|UT:${ut}s] ${msg}`);
+};
 
 
 /**
@@ -16,15 +22,15 @@ let clienteWA = null;
  */
 async function iniciarWhatsApp() {
     if (estaIniciando) {
-        console.warn('⚠️  Ya hay una inicialización de WhatsApp en curso...');
+        logMsg('⚠️  Ya hay una inicialización de WhatsApp en curso...');
         return;
     }
     if (estadoActual === 'conectado' && clienteWA) {
-        console.log('✅ WhatsApp ya está conectado.');
+        logMsg('✅ WhatsApp ya está conectado.');
         return;
     }
 
-    console.log('📱 Iniciando cliente WhatsApp Web...');
+    logMsg('📱 Iniciando cliente WhatsApp Web...');
     estaIniciando = true;
 
     // Detectar ejecutable de Chromium/Chrome disponible
@@ -38,26 +44,26 @@ async function iniciarWhatsApp() {
     ];
     const executablePath = chromiumPaths.find(p => fs.existsSync(p));
     if (!executablePath) {
-        console.error('❌ No se encontró Chromium/Chrome en el sistema.');
+        logMsg('❌ No se encontró Chromium/Chrome en el sistema.');
         estaIniciando = false;
         return;
     }
-    console.log('🌐 Usando navegador:', executablePath);
+    logMsg(`🌐 Usando navegador: ${executablePath}`);
 
-    // Limpiar SingletonLock si existe (de crashes anteriores o zombies)
+    // Limpiar SingletonLock si existe
     const cleanupLocks = () => {
-        const clientId = require('../config/api').WSP_INSTANCIA;
+        const { WSP_INSTANCIA } = require('../config/api');
         const paths = [
-            path.join(process.cwd(), `.wwebjs_auth_${clientId}`, `session-${clientId}`, 'SingletonLock'),
+            path.join(process.cwd(), `.wwebjs_auth_${WSP_INSTANCIA}`, `session-${WSP_INSTANCIA}`, 'SingletonLock'),
             path.join(process.cwd(), '.wwebjs_auth', 'session', 'SingletonLock')
         ];
         paths.forEach(p => {
             if (fs.existsSync(p)) {
                 try {
                     fs.unlinkSync(p);
-                    console.log(`🔓 SingletonLock eliminado: ${p}`);
+                    logMsg(`🔓 SingletonLock eliminado: ${p}`);
                 } catch (e) {
-                    console.warn(`⚠️  Lock ocupado por otro proceso: ${p}`);
+                    logMsg(`⚠️  Lock ocupado: ${p}`);
                 }
             }
         });
@@ -70,21 +76,19 @@ async function iniciarWhatsApp() {
             clientId: WSP_INSTANCIA,
             dataPath: `.wwebjs_auth_${WSP_INSTANCIA}`
         }),
-        webVersionCache: {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
-        },
         puppeteer: {
-            headless: 'new',
+            headless: true, // Clasico headless (a veces mas estable en VPS)
             executablePath,
-            dumpio: true, // Ver logs internos de Chromium en PM2
+            dumpio: true,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
+                '--no-zygote',
                 '--no-first-run',
-                '--disable-extensions'
+                '--disable-extensions',
+                '--disable-features=IsolateOrigins,site-per-process' // Reduce uso de RAM
             ]
         }
     });
@@ -92,7 +96,7 @@ async function iniciarWhatsApp() {
     // ── Eventos ──
 
     clienteWA.on('qr', async (qr) => {
-        console.log('📷 QR generado — escanéalo desde el ERP');
+        logMsg('📷 QR generado — escanéalo desde el ERP');
         estadoActual = 'qr_pendiente';
         qrBase64 = await qrcode.toDataURL(qr);
         await reportarEstadoVPS('qr_pendiente', qrBase64);
@@ -100,7 +104,7 @@ async function iniciarWhatsApp() {
 
     clienteWA.on('ready', async () => {
         const numero = clienteWA.info?.wid?.user || null;
-        console.log(`✅ WhatsApp Web conectado y listo — Número: ${numero || 'desconocido'}`);
+        logMsg(`✅ WhatsApp Web conectado y listo — Número: ${numero || 'desconocido'}`);
         estadoActual = 'conectado';
         estaIniciando = false;
         qrBase64 = null;
@@ -108,14 +112,14 @@ async function iniciarWhatsApp() {
     });
 
     clienteWA.on('auth_failure', async (msg) => {
-        console.error('❌ Fallo de autenticación:', msg);
+        logMsg(`❌ Fallo de autenticación: ${msg}`);
         estadoActual = 'desconectado';
         estaIniciando = false;
         await reportarEstadoVPS('desconectado', null);
     });
 
     clienteWA.on('disconnected', async (reason) => {
-        console.warn('⚠️  WhatsApp desconectado:', reason);
+        logMsg(`⚠️  WhatsApp desconectado: ${reason}`);
         estadoActual = 'desconectado';
         estaIniciando = false;
         qrBase64 = null;
@@ -128,23 +132,23 @@ async function iniciarWhatsApp() {
     // Timeout de seguridad: si no inicializa en 240s, algo está mal
     const initTimeout = setTimeout(() => {
         if (estaIniciando && estadoActual === 'desconectado') {
-            console.error('⌛ clienteWA.initialize() tardando demasiado (240s)...');
+            logMsg('⌛ clienteWA.initialize() tardando demasiado (240s)...');
         }
     }, 240_000);
 
-    console.log('🏁 Preparando clienteWA.initialize() en 5 segundos...');
-    await new Promise(r => setTimeout(r, 5000));
+    logMsg('🏁 Preparando clienteWA.initialize() en 10 segundos...');
+    await new Promise(r => setTimeout(r, 10_000));
 
     try {
         await clienteWA.initialize();
         clearTimeout(initTimeout);
         estaIniciando = false;
-        console.log('🚀 clienteWA.initialize() completado');
+        logMsg('🚀 clienteWA.initialize() completado');
         return clienteWA;
     } catch (err) {
         clearTimeout(initTimeout);
         estaIniciando = false;
-        console.error('❌ Error en clienteWA.initialize():', err.message);
+        logMsg(`❌ Error en clienteWA.initialize(): ${err.message}`);
 
         // Programar reintento solo si falló la inicialización inicial
         setTimeout(iniciarWhatsApp, 30_000);
@@ -172,7 +176,7 @@ async function reportarEstadoVPS(estado, qr, numero = null) {
             timeout: 10_000
         });
     } catch (err) {
-        console.error('⚠️  No se pudo reportar estado a la API:', err.message);
+        logMsg(`⚠️  No se pudo reportar estado a la API: ${err.message}`);
     }
 }
 
@@ -194,19 +198,18 @@ function obtenerCliente() { return clienteWA; }
  * Destruye el cliente actual, borra .wwebjs_auth y re-inicializa (genera nuevo QR)
  */
 async function resetearSesion() {
-    console.log('🔄 Iniciando reset de sesión WhatsApp...');
+    logMsg('🔄 Iniciando reset de sesión WhatsApp...');
 
     // 1. Destruir cliente actual (sin esperar demasiado)
     if (clienteWA) {
-        console.log('🔌 Destruyendo cliente anterior...');
+        logMsg('🔌 Destruyendo cliente anterior...');
         try {
-            // Intentamos destruir con un timeout para que no bloquee todo
             await Promise.race([
                 clienteWA.destroy(),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout destruyendo cliente')), 5000))
             ]);
         } catch (e) {
-            console.warn('⚠️  Al destruir cliente:', e.message);
+            logMsg(`⚠️  Al destruir cliente: ${e.message}`);
         }
         clienteWA = null;
     }
@@ -214,36 +217,34 @@ async function resetearSesion() {
     // 2. Borrar la carpeta de sesión local de forma radical
     const fs = require('fs');
     const path = require('path');
-    const authPath = path.resolve('.wwebjs_auth');
+    const { WSP_INSTANCIA } = require('../config/api');
+    const authPath = path.resolve(`.wwebjs_auth_${WSP_INSTANCIA}`);
 
-    console.log(`🗑️  Limpiando carpeta de sesión: ${authPath}`);
+    logMsg(`🗑️  Limpiando carpeta de sesión: ${authPath}`);
     if (fs.existsSync(authPath)) {
         try {
-            // Intentar borrar varias veces si falla por bloqueos
             fs.rmSync(authPath, { recursive: true, force: true });
-            console.log('✅ Carpeta .wwebjs_auth eliminada satisfactoriamente');
+            logMsg(`✅ Carpeta ${authPath} eliminada satisfactoriamente`);
         } catch (e) {
-            console.error('❌ No se pudo eliminar la carpeta de sesión:', e.message);
+            logMsg(`❌ No se pudo eliminar la carpeta de sesión: ${e.message}`);
         }
     }
 
-    // 3. Matar procesos de Chrome huérfanos si es posible (solo funciona si hay permisos)
+    // 3. Matar procesos de Chrome huérfanos residuo de esta instancia
     try {
         const { execSync } = require('child_process');
-        console.log('🧹 Intentando limpiar procesos Chrome huérfanos...');
-        // Ojo: esto puede afectar a otras instancias si no se tiene cuidado,
-        // pero en un VPS dedicado a esto suele ser necesario.
-        // Solo matamos procesos que tengan el path de esta instancia en sus args.
-        // execSync(`pkill -f "${process.cwd()}" || true`);
+        logMsg('🧹 Intentando limpiar procesos Chrome huérfanos...');
+        // execSync(`pkill -f ".wwebjs_auth_${WSP_INSTANCIA}" || true`);
     } catch (e) { }
 
     // 4. Actualizar estado y re-notificar
     estadoActual = 'desconectado';
     qrBase64 = null;
+    estaIniciando = false;
     await reportarEstadoVPS('desconectado', null);
 
     // 5. Re-inicializar 
-    console.log('⏳ Re-inicializando en 5 segundos...');
+    logMsg('⏳ Re-inicializando en 5 segundos...');
     setTimeout(iniciarWhatsApp, 5_000);
 }
 
