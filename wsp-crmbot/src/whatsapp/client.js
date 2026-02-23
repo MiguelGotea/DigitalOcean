@@ -8,6 +8,7 @@ let estadoActual = 'desconectado';
 let estaIniciando = false;
 let qrBase64 = null;
 let clienteWA = null;
+let sessionIntentId = 0; // Para cancelar inits obsoletos durante el delay de stagger
 
 const logMsg = (msg) => {
     const pid = process.pid;
@@ -21,8 +22,10 @@ const logMsg = (msg) => {
  * La sesión se guarda en .wwebjs_auth/ (excluida del repo).
  */
 async function iniciarWhatsApp() {
+    const currentInitId = ++sessionIntentId;
+
     if (estaIniciando) {
-        logMsg('⚠️  Ya hay una inicialización de WhatsApp en curso...');
+        logMsg(`⚠️  Ya hay una inicialización en curso... (Intento ID:${currentInitId})`);
         return;
     }
     if (estadoActual === 'conectado' && clienteWA) {
@@ -30,7 +33,7 @@ async function iniciarWhatsApp() {
         return;
     }
 
-    logMsg('📱 Iniciando cliente WhatsApp Web...');
+    logMsg(`📱 [ID:${currentInitId}] Iniciando cliente WhatsApp Web...`);
     estaIniciando = true;
     estadoActual = 'inicializando';
     await reportarEstadoVPS('inicializando', null);
@@ -154,29 +157,40 @@ async function iniciarWhatsApp() {
     }, 300_000);
 
     const staggerDelay = WSP_INSTANCIA === 'wsp-crmbot' ? 45_000 : 15_000;
-    logMsg(`🏁 Preparando clienteWA.initialize() en ${staggerDelay / 1000} segundos para evitar saturar RAM...`);
+    logMsg(`🏁 [ID:${currentInitId}] Preparando clienteWA.initialize() en ${staggerDelay / 1000} segundos para evitar saturar RAM...`);
     await new Promise(r => setTimeout(r, staggerDelay));
+
+    // VERIFICAR QUE NO HAYA HABIDO UN RESET EN EL INTERIN
+    if (currentInitId !== sessionIntentId) {
+        logMsg(`🛑 [ID:${currentInitId}] Inicialización cancelada (detectado reset o nuevo intento).`);
+        estaIniciando = false;
+        return null;
+    }
+
+    logMsg(`🚀 [ID:${currentInitId}] Ejecutando clienteWA.initialize()...`);
 
     try {
         await clienteWA.initialize();
         clearTimeout(initTimeout);
         estaIniciando = false;
-        logMsg('🚀 clienteWA.initialize() completado');
+        logMsg(`✅ [ID:${currentInitId}] clienteWA.initialize() completado`);
         return clienteWA;
     } catch (err) {
         clearTimeout(initTimeout);
         estaIniciando = false;
-        logMsg(`❌ Error en clienteWA.initialize(): ${err.message}`);
+        logMsg(`❌ [ID:${currentInitId}] Error en clienteWA.initialize(): ${err.message}`);
 
-        // Programar reintento solo si falló la inicialización inicial
-        setTimeout(iniciarWhatsApp, 30_000);
+        // Programar reintento solo si falló la inicialización inicial y no hay reset pendiente
+        if (currentInitId === sessionIntentId) {
+            setTimeout(iniciarWhatsApp, 30_000);
+        }
         return null;
     }
 }
 
 /**
  * Notifica a la API el estado actual del VPS/WhatsApp
- * @param {string} estado - conectado|qr_pendiente|desconectado
+ * @param {string} estado - conectado|qr_pendiente|desconectado|inicializando
  * @param {string|null} qr - QR en base64 (solo cuando qr_pendiente)
  * @param {string|null} numero - Número WhatsApp vinculado (solo cuando conectado)
  */
@@ -218,7 +232,8 @@ function obtenerCliente() { return clienteWA; }
  * Destruye el cliente actual, borra .wwebjs_auth y re-inicializa (genera nuevo QR)
  */
 async function resetearSesion() {
-    logMsg('🔄 Iniciando reset de sesión WhatsApp...');
+    sessionIntentId++; // Invalidar cualquier inicialización en cola
+    logMsg(`🔄 [ID:${sessionIntentId}] Iniciando reset de sesión WhatsApp...`);
 
     // 1. Destruir cliente actual (sin esperar demasiado)
     if (clienteWA) {
@@ -253,7 +268,6 @@ async function resetearSesion() {
     // 3. Matar procesos de Chrome huérfanos residuo de esta instancia
     try {
         const { execSync } = require('child_process');
-        const { WSP_INSTANCIA } = require('../config/api');
         logMsg(`🧹 Limpiando procesos Chrome de ${WSP_INSTANCIA}...`);
         execSync(`pkill -9 -f ".wwebjs_auth_${WSP_INSTANCIA}" || true`);
     } catch (e) { }
