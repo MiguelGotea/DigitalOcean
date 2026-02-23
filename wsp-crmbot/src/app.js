@@ -1,11 +1,20 @@
-'use strict';
-
-require('dotenv').config();
-const express = require('express');
-const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion } = require('./whatsapp/client');
-const { iniciarWorker } = require('./workers/campaign_worker');
-const { iniciarCRMBot } = require('./workers/crm_bot_worker');
 const { WSP_INSTANCIA } = require('./config/api');
+
+const logApp = (msg) => {
+    const pid = process.pid;
+    const ut = Math.round(process.uptime());
+    console.log(`[APP|PID:${pid}|UT:${ut}s] ${msg}`);
+};
+
+// ── Manejo de errores globales ──
+process.on('uncaughtException', (err) => {
+    logApp(`💥 FATAL UNCAUGHT EXCEPTION: ${err.message}`);
+    console.error(err.stack);
+    process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+    logApp(`💥 UNHANDLED REJECTION: ${reason}`);
+});
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -70,32 +79,34 @@ app.post('/reset', validarToken, async (req, res) => {
 
 // ── Arranque: Express PRIMERO, luego WhatsApp en background ──
 async function arrancar() {
-    console.log(`🚀 Iniciando Pitaya WhatsApp Service [${WSP_INSTANCIA}]...`);
+    logApp(`🚀 Iniciando Pitaya WhatsApp Service [${WSP_INSTANCIA}]...`);
 
-    // 1. Levantar Express inmediatamente (así el puerto siempre está disponible)
+    // 1. Levantar Express inmediatamente
     await new Promise((resolve) => {
         app.listen(PORT, '0.0.0.0', () => {
-            console.log(`✅ API interna [${WSP_INSTANCIA}] escuchando en http://0.0.0.0:${PORT}`);
+            logApp(`✅ API interna [${WSP_INSTANCIA}] escuchando en http://0.0.0.0:${PORT}`);
             resolve();
         });
     });
 
-    // 2. Iniciar WhatsApp en background (no bloquea el servidor Express)
+    logApp('⏳ Esperando 15s antes de arrancar WhatsApp para estabilizar sistema...');
+    await new Promise(r => setTimeout(r, 15_000));
+
+    // 2. Iniciar WhatsApp en background
     iniciarWhatsApp()
         .then((clienteWA) => {
-            if (!clienteWA) return; // Ya se encargará el retry interno de client.js
+            if (!clienteWA) return;
 
-            // Activar workers según instancia
             if (WSP_INSTANCIA === 'wsp-crmbot') {
                 iniciarCRMBot(clienteWA);
-                console.log('🤖 Modo CRM Bot activo');
+                logApp('🤖 Modo CRM Bot activo');
             } else {
                 iniciarWorker();
-                console.log('📣 Modo Campañas activo');
+                logApp('📣 Modo Campañas activo');
             }
         })
         .catch(err => {
-            console.error('❌ Error fatal en flujo de WhatsApp:', err.message);
+            logApp(`❌ Error fatal en flujo de WhatsApp: ${err.message}`);
         });
 
     // 3. Heartbeat: actualiza ultimo_ping cada 60s
@@ -103,9 +114,9 @@ async function arrancar() {
         try {
             const estado = obtenerEstadoActual();
             await reportarEstadoVPS(estado, null);
-            console.log(`💓 Heartbeat [${WSP_INSTANCIA}] — estado: ${estado}`);
+            logApp(`💓 Heartbeat [${WSP_INSTANCIA}] — estado: ${estado}`);
         } catch (e) {
-            console.warn('⚠️  Heartbeat falló:', e.message);
+            logApp(`⚠️  Heartbeat falló: ${e.message}`);
         }
     }, 60_000);
 }

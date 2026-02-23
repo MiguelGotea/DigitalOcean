@@ -88,7 +88,18 @@ async function iniciarWhatsApp() {
                 '--no-zygote',
                 '--no-first-run',
                 '--disable-extensions',
-                '--disable-features=IsolateOrigins,site-per-process' // Reduce uso de RAM
+                '--disable-background-networking',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-breakpad',
+                '--disable-component-update',
+                '--disable-domain-reliability',
+                '--disable-sync',
+                '--disable-translate',
+                '--metrics-recording-only',
+                '--mute-audio',
+                '--no-default-browser-check',
+                '--disable-features=IsolateOrigins,site-per-process,AudioServiceOutOfProcess'
             ]
         }
     });

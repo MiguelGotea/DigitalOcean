@@ -30,7 +30,8 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       max_restarts: 10,
-      restart_delay: 5000,
+      restart_delay: 10000,
+      max_memory_restart: '800M',
       env: {
         NODE_ENV: 'production',
         PORT: 3001,
@@ -77,7 +78,8 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       max_restarts: 10,
-      restart_delay: 5000,
+      restart_delay: 10000,
+      max_memory_restart: '800M',
       env: {
         NODE_ENV: 'production',
         PORT: 3003,
