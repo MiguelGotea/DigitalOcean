@@ -5,6 +5,7 @@ const qrcode = require('qrcode');
 
 // Estado interno del cliente
 let estadoActual = 'desconectado';   // desconectado | qr_pendiente | conectado
+let estaIniciando = false;           // Bloqueo para evitar llamadas concurrentes
 let qrBase64 = null;
 let clienteWA = null;
 
@@ -14,7 +15,17 @@ let clienteWA = null;
  * La sesión se guarda en .wwebjs_auth/ (excluida del repo).
  */
 async function iniciarWhatsApp() {
+    if (estaIniciando) {
+        console.warn('⚠️  Ya hay una inicialización de WhatsApp en curso...');
+        return;
+    }
+    if (estadoActual === 'conectado' && clienteWA) {
+        console.log('✅ WhatsApp ya está conectado.');
+        return;
+    }
+
     console.log('📱 Iniciando cliente WhatsApp Web...');
+    estaIniciando = true;
 
     // Detectar ejecutable de Chromium/Chrome disponible
     const fs = require('fs');
@@ -24,12 +35,12 @@ async function iniciarWhatsApp() {
         '/usr/bin/google-chrome-stable',    // Chrome estable (preferido)
         '/usr/bin/google-chrome',           // Chrome genérico
         '/usr/bin/chromium',                // apt en Ubuntu sin snap
-        '/usr/bin/chromium-browser',        // último recurso (puede ser snap stub)
     ];
     const executablePath = chromiumPaths.find(p => fs.existsSync(p));
     if (!executablePath) {
-        console.error('❌ No se encontró Chromium/Chrome. Ejecuta: apt install -y chromium');
-        process.exit(1);
+        console.error('❌ No se encontró Chromium/Chrome en el sistema.');
+        estaIniciando = false;
+        return;
     }
     console.log('🌐 Usando navegador:', executablePath);
 
@@ -53,14 +64,14 @@ async function iniciarWhatsApp() {
     };
     cleanupLocks();
 
-    const clientId = require('../config/api').WSP_INSTANCIA;
+    const { WSP_INSTANCIA } = require('../config/api');
     clienteWA = new Client({
         authStrategy: new LocalAuth({
-            clientId: clientId,
-            dataPath: `.wwebjs_auth_${clientId}`
+            clientId: WSP_INSTANCIA,
+            dataPath: `.wwebjs_auth_${WSP_INSTANCIA}`
         }),
         puppeteer: {
-            headless: 'new', // Recomendado para puppeteer >= 20
+            headless: 'new',
             executablePath,
             args: [
                 '--no-sandbox',
@@ -68,7 +79,8 @@ async function iniciarWhatsApp() {
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--no-first-run',
-                '--disable-extensions'
+                '--disable-extensions',
+                '--js-flags=--max-old-space-size=512' // 2GB RAM disponible ahora
             ]
         }
     });
@@ -78,9 +90,7 @@ async function iniciarWhatsApp() {
     clienteWA.on('qr', async (qr) => {
         console.log('📷 QR generado — escanéalo desde el ERP');
         estadoActual = 'qr_pendiente';
-        // Convertir QR a base64 para mostrarlo en el ERP
         qrBase64 = await qrcode.toDataURL(qr);
-        // Reportar estado a la API
         await reportarEstadoVPS('qr_pendiente', qrBase64);
     });
 
@@ -88,32 +98,32 @@ async function iniciarWhatsApp() {
         const numero = clienteWA.info?.wid?.user || null;
         console.log(`✅ WhatsApp Web conectado y listo — Número: ${numero || 'desconocido'}`);
         estadoActual = 'conectado';
+        estaIniciando = false;
         qrBase64 = null;
         await reportarEstadoVPS('conectado', null, numero);
-    });
-
-    clienteWA.on('authenticated', () => {
-        console.log('🔐 Sesión autenticada');
     });
 
     clienteWA.on('auth_failure', async (msg) => {
         console.error('❌ Fallo de autenticación:', msg);
         estadoActual = 'desconectado';
+        estaIniciando = false;
         await reportarEstadoVPS('desconectado', null);
     });
 
     clienteWA.on('disconnected', async (reason) => {
         console.warn('⚠️  WhatsApp desconectado:', reason);
         estadoActual = 'desconectado';
+        estaIniciando = false;
         qrBase64 = null;
         await reportarEstadoVPS('desconectado', null);
-        // Reintentar conexión después de 30s
-        setTimeout(iniciarWhatsApp, 30_000);
+
+        // Reintentar conexión después de un delay
+        setTimeout(iniciarWhatsApp, 15_000);
     });
 
     // Timeout de seguridad: si no inicializa en 120s, algo está mal
     const initTimeout = setTimeout(() => {
-        if (estadoActual === 'desconectado') {
+        if (estaIniciando && estadoActual === 'desconectado') {
             console.error('⌛ clienteWA.initialize() tardando demasiado (120s)...');
         }
     }, 120_000);
@@ -124,13 +134,16 @@ async function iniciarWhatsApp() {
     try {
         await clienteWA.initialize();
         clearTimeout(initTimeout);
+        estaIniciando = false;
         console.log('🚀 clienteWA.initialize() completado');
         return clienteWA;
     } catch (err) {
         clearTimeout(initTimeout);
+        estaIniciando = false;
         console.error('❌ Error en clienteWA.initialize():', err.message);
-        // No lanzamos el error para evitar crash del proceso completo, 
-        // el loop de reintento en app.js se encargará de volver a llamar.
+
+        // Programar reintento solo si falló la inicialización inicial
+        setTimeout(iniciarWhatsApp, 30_000);
         return null;
     }
 }

@@ -83,6 +83,8 @@ async function arrancar() {
     // 2. Iniciar WhatsApp en background (no bloquea el servidor Express)
     iniciarWhatsApp()
         .then((clienteWA) => {
+            if (!clienteWA) return; // Ya se encargará el retry interno de client.js
+
             // Activar workers según instancia
             if (WSP_INSTANCIA === 'wsp-crmbot') {
                 iniciarCRMBot(clienteWA);
@@ -93,8 +95,7 @@ async function arrancar() {
             }
         })
         .catch(err => {
-            console.error('❌ Error iniciando WhatsApp (reintentando en 30s):', err.message);
-            setTimeout(() => iniciarWhatsApp(), 30_000);
+            console.error('❌ Error fatal en flujo de WhatsApp:', err.message);
         });
 
     // 3. Heartbeat: actualiza ultimo_ping cada 60s
