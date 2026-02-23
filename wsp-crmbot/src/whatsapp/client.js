@@ -81,10 +81,10 @@ async function iniciarWhatsApp() {
             clientId: WSP_INSTANCIA,
             dataPath: `.wwebjs_auth_${WSP_INSTANCIA}`
         }),
-        webVersionCache: {
+        /* webVersionCache: {
             type: 'remote',
             remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018911162-alpha.html'
-        },
+        }, */
         puppeteer: {
             headless: true, // Clasico headless (a veces mas estable en VPS)
             executablePath,
@@ -115,16 +115,23 @@ async function iniciarWhatsApp() {
 
     // ── Eventos ──
 
+    clienteWA.on('loading_screen', (percent, message) => {
+        if (currentInitId !== sessionIntentId) return;
+        logMsg(`⏳ [ID:${currentInitId}] Cargando WhatsApp Web: ${percent}% - ${message}`);
+    });
+
     clienteWA.on('qr', async (qr) => {
-        logMsg('📷 QR generado — escanéalo desde el ERP');
+        if (currentInitId !== sessionIntentId) return;
+        logMsg(`📷 [ID:${currentInitId}] QR generado — escanéalo desde el ERP`);
         estadoActual = 'qr_pendiente';
         qrBase64 = await qrcode.toDataURL(qr);
         await reportarEstadoVPS('qr_pendiente', qrBase64);
     });
 
     clienteWA.on('ready', async () => {
+        if (currentInitId !== sessionIntentId) return;
         const numero = clienteWA.info?.wid?.user || null;
-        logMsg(`✅ WhatsApp Web conectado y listo — Número: ${numero || 'desconocido'}`);
+        logMsg(`✅ [ID:${currentInitId}] WhatsApp Web conectado y listo — Número: ${numero || 'desconocido'}`);
         estadoActual = 'conectado';
         estaIniciando = false;
         qrBase64 = null;
@@ -132,14 +139,15 @@ async function iniciarWhatsApp() {
     });
 
     clienteWA.on('auth_failure', async (msg) => {
-        logMsg(`❌ Fallo de autenticación: ${msg}`);
+        if (currentInitId !== sessionIntentId) return;
+        logMsg(`❌ [ID:${currentInitId}] Fallo de autenticación: ${msg}`);
         estadoActual = 'desconectado';
         estaIniciando = false;
         await reportarEstadoVPS('desconectado', null);
     });
 
     clienteWA.on('disconnected', async (reason) => {
-        logMsg(`⚠️  WhatsApp desconectado: ${reason}`);
+        logMsg(`⚠️  [ID:${currentInitId}] WhatsApp desconectado: ${reason}`);
         estadoActual = 'desconectado';
         estaIniciando = false;
         qrBase64 = null;
@@ -149,12 +157,12 @@ async function iniciarWhatsApp() {
         setTimeout(iniciarWhatsApp, 15_000);
     });
 
-    // Timeout de seguridad: si no inicializa en 300s, algo está mal
+    // Timeout de seguridad: si no inicializa en 10 minutos, algo está mal
     const initTimeout = setTimeout(() => {
-        if (estaIniciando && estadoActual === 'desconectado') {
-            logMsg('⌛ clienteWA.initialize() tardando demasiado (300s)...');
+        if (estaIniciando && currentInitId === sessionIntentId) {
+            logMsg(`⌛ [ID:${currentInitId}] clienteWA.initialize() tardando demasiado (Timeout 10m)...`);
         }
-    }, 300_000);
+    }, 600_000);
 
     const staggerDelay = WSP_INSTANCIA === 'wsp-crmbot' ? 45_000 : 15_000;
     logMsg(`🏁 [ID:${currentInitId}] Preparando clienteWA.initialize() en ${staggerDelay / 1000} segundos para evitar saturar RAM...`);
