@@ -8,6 +8,7 @@
  *   wsp-clientes  → Puerto 3001 → Campañas de marketing a clientesclub
  *   wsp-crmbot    → Puerto 3003 → Bot CRM híbrido (keywords + TF-IDF + Naive Bayes)
  *
+ * 
  * Para agregar un número nuevo, copiar el bloque y cambiar:
  *   - name          → nombre único del proceso PM2
  *   - cwd           → ruta de la nueva instancia en el VPS
