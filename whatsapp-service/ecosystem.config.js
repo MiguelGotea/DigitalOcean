@@ -6,6 +6,7 @@
  *
  * Instancias activas:
  *   wsp-clientes  → Puerto 3001 → Campañas de marketing a clientesclub
+ *   wsp-crmbot    → Puerto 3003 → Bot CRM híbrido (keywords + TF-IDF + Naive Bayes)
  *
  * Para agregar un número nuevo, copiar el bloque y cambiar:
  *   - name          → nombre único del proceso PM2
@@ -62,27 +63,28 @@ module.exports = {
     //   merge_logs:      true
     // },
 
-    // ── Instancia 3 (FUTURA): CRM Bot ─────────────────────────────────────
-    // Bot inteligente para responder mensajes entrantes y gestionar chats.
-    //
-    // {
-    //   name:          'wsp-crmbot',
-    //   script:        'src/app.js',
-    //   cwd:           '/var/www/wsp-crmbot',
-    //   watch:         false,
-    //   instances:     1,
-    //   autorestart:   true,
-    //   max_restarts:  10,
-    //   restart_delay: 5000,
-    //   env: {
-    //     NODE_ENV: 'production',
-    //     PORT:     3003
-    //   },
-    //   out_file:        './logs/out.log',
-    //   error_file:      './logs/error.log',
-    //   log_date_format: 'YYYY-MM-DD HH:mm:ss',
-    //   merge_logs:      true
-    // },
+    // ── Instancia 3: CRM Bot (Bot híbrido WhatsApp) ───────────────────────
+    // Usa bot de intenciones con keywords + TF-IDF + Naive Bayes
+    // Setup VPS: ver multi_instancia_wsp.sql y README para configurar .env
+    {
+      name: 'wsp-crmbot',
+      script: 'src/app.js',
+      cwd: '/var/www/wsp-crmbot',
+      watch: false,
+      instances: 1,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3003
+      },
+      out_file: './logs/out.log',
+      error_file: './logs/error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true
+    },
 
   ]
 };
+
