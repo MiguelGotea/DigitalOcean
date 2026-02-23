@@ -455,6 +455,25 @@ Para correr `wsp-clientes` y `wsp-crmbot` simultáneamente sin que una afecte a 
 - Aumentar el límite de memoria de Node: `node --max-old-space-size=1024 src/app.js`.
 - Asegurar que `--disable-gpu` y `--no-sandbox` estén presentes en los `puppeteer.args`.
 
+---
+
+### 11. Mantenimiento Futuro (Chrome y Librerías)
+
+WhatsApp Web cambia su código interno casi semanalmente. Para mantener el servicio estable a largo plazo:
+
+1.  **Actualización de Chrome**: Si el VPS deja de conectar, lo primero es actualizar el navegador:
+    ```bash
+    apt update && apt install --only-upgrade google-chrome-stable
+    ```
+2.  **Sincronización de whatsapp-web.js**: Siempre intenta usar la versión recomendada por la comunidad en su [repositorio oficial](https://github.com/pedroslopez/whatsapp-web.js).
+    - Si actualizas `whatsapp-web.js` en el `package.json`, **borra `node_modules`** en el VPS antes de hacer `npm install` para que Puppeteer se descargue los binaries compatibles con la nueva versión de la librería.
+3.  **Logs de PM2**: Monitorea el crecimiento de los logs. Si ves que ocupan mucho espacio, instala `pm2-logrotate`:
+    ```bash
+    pm2 install pm2-logrotate
+    ```
+
+---
+
 ## Guía para próximo proyecto: Mensajes a Colaboradores (Operarios)
 
 El próximo módulo enviará mensajes a colaboradores en la tabla `Operarios` en lugar de `clientesclub`. Diferencias a considerar:
