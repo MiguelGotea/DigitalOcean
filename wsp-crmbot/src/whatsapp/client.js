@@ -70,17 +70,21 @@ async function iniciarWhatsApp() {
             clientId: WSP_INSTANCIA,
             dataPath: `.wwebjs_auth_${WSP_INSTANCIA}`
         }),
+        webVersionCache: {
+            type: 'remote',
+            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
+        },
         puppeteer: {
             headless: 'new',
             executablePath,
+            dumpio: true, // Ver logs internos de Chromium en PM2
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--no-first-run',
-                '--disable-extensions',
-                '--js-flags=--max-old-space-size=512' // 2GB RAM disponible ahora
+                '--disable-extensions'
             ]
         }
     });
