@@ -94,7 +94,7 @@ async function iniciarWhatsApp() {
             remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018911162-alpha.html'
         },
         puppeteer: {
-            headless: true, // Volvemos al clásico para comparar
+            headless: 'new',
             executablePath,
             dumpio: true,
             args: [
@@ -105,7 +105,12 @@ async function iniciarWhatsApp() {
                 '--no-zygote',
                 '--no-first-run',
                 '--disable-extensions',
-                '--disable-background-networking'
+                '--disable-background-networking',
+                '--disable-default-apps',
+                '--disable-setuid-sandbox',
+                '--disable-sync',
+                '--no-default-browser-check',
+                '--test-type'
             ]
         }
     });
