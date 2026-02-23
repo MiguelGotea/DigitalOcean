@@ -37,8 +37,8 @@ async function iniciarWhatsApp() {
     const cleanupLocks = () => {
         const clientId = require('../config/api').WSP_INSTANCIA;
         const paths = [
-            path.join(process.cwd(), '.wwebjs_auth', 'session', 'SingletonLock'),
-            path.join(process.cwd(), '.wwebjs_auth', `session-${clientId}`, 'SingletonLock')
+            path.join(process.cwd(), `.wwebjs_auth_${clientId}`, `session-${clientId}`, 'SingletonLock'),
+            path.join(process.cwd(), '.wwebjs_auth', 'session', 'SingletonLock')
         ];
         paths.forEach(p => {
             if (fs.existsSync(p)) {
@@ -53,19 +53,14 @@ async function iniciarWhatsApp() {
     };
     cleanupLocks();
 
+    const clientId = require('../config/api').WSP_INSTANCIA;
     clienteWA = new Client({
         authStrategy: new LocalAuth({
-            clientId: require('../config/api').WSP_INSTANCIA,
-            dataPath: '.wwebjs_auth'
+            clientId: clientId,
+            dataPath: `.wwebjs_auth_${clientId}`
         }),
-        /*
-        webVersionCache: {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1015901134-alpha.html'
-        },
-        */
         puppeteer: {
-            headless: true,
+            headless: 'new', // Recomendado para puppeteer >= 20
             executablePath,
             args: [
                 '--no-sandbox',
@@ -73,8 +68,7 @@ async function iniciarWhatsApp() {
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--no-first-run',
-                '--disable-extensions',
-                '--js-flags=--max-old-space-size=256'
+                '--disable-extensions'
             ]
         }
     });
