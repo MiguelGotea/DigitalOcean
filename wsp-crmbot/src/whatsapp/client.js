@@ -18,6 +18,8 @@ async function iniciarWhatsApp() {
 
     // Detectar ejecutable de Chromium/Chrome disponible
     const fs = require('fs');
+    const path = require('path');
+
     const chromiumPaths = [
         '/usr/bin/google-chrome-stable',    // Chrome estable (preferido)
         '/usr/bin/google-chrome',           // Chrome genérico
@@ -30,6 +32,17 @@ async function iniciarWhatsApp() {
         process.exit(1);
     }
     console.log('🌐 Usando navegador:', executablePath);
+
+    // Limpiar SingletonLock si existe (de crashes anteriores)
+    const lockPath = path.join(process.cwd(), '.wwebjs_auth', 'session', 'SingletonLock');
+    if (fs.existsSync(lockPath)) {
+        try {
+            fs.unlinkSync(lockPath);
+            console.log('🔓 SingletonLock limpiado');
+        } catch (e) {
+            console.warn('⚠️  No se pudo limpiar SingletonLock:', e.message);
+        }
+    }
 
     clienteWA = new Client({
         authStrategy: new LocalAuth({

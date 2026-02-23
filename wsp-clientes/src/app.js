@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
 
-// ── Seguridad básica: token requerido para rutas sensibles ──
+// ── Seguridad: token requerido para rutas sensibles ──
 const WSP_TOKEN = process.env.WSP_TOKEN || '';
 function validarToken(req, res, next) {
     const token = req.headers['x-wsp-token'] || req.query.token;
@@ -68,22 +68,36 @@ app.post('/reset', validarToken, async (req, res) => {
     }
 });
 
-// ── Arranque ──
+// ── Arranque: Express PRIMERO, luego WhatsApp en background ──
 async function arrancar() {
     console.log(`🚀 Iniciando Pitaya WhatsApp Service [${WSP_INSTANCIA}]...`);
 
-    const clienteWA = await iniciarWhatsApp();
+    // 1. Levantar Express inmediatamente (así el puerto siempre está disponible)
+    await new Promise((resolve) => {
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`✅ API interna [${WSP_INSTANCIA}] escuchando en http://0.0.0.0:${PORT}`);
+            resolve();
+        });
+    });
 
-    // Activar workers según instancia
-    if (WSP_INSTANCIA === 'wsp-crmbot') {
-        iniciarCRMBot(clienteWA);
-        console.log('🤖 Modo CRM Bot activo');
-    } else {
-        iniciarWorker();
-        console.log('📣 Modo Campañas activo');
-    }
+    // 2. Iniciar WhatsApp en background (no bloquea el servidor Express)
+    iniciarWhatsApp()
+        .then((clienteWA) => {
+            // Activar workers según instancia
+            if (WSP_INSTANCIA === 'wsp-crmbot') {
+                iniciarCRMBot(clienteWA);
+                console.log('🤖 Modo CRM Bot activo');
+            } else {
+                iniciarWorker();
+                console.log('📣 Modo Campañas activo');
+            }
+        })
+        .catch(err => {
+            console.error('❌ Error iniciando WhatsApp (reintentando en 30s):', err.message);
+            setTimeout(() => iniciarWhatsApp(), 30_000);
+        });
 
-    // ── Heartbeat: actualiza ultimo_ping en la API cada 60s ──
+    // 3. Heartbeat: actualiza ultimo_ping cada 60s
     setInterval(async () => {
         try {
             const estado = obtenerEstadoActual();
@@ -93,10 +107,6 @@ async function arrancar() {
             console.warn('⚠️  Heartbeat falló:', e.message);
         }
     }, 60_000);
-
-    app.listen(PORT, '0.0.0.0', () => {
-        console.log(`✅ API interna [${WSP_INSTANCIA}] escuchando en http://127.0.0.1:${PORT}`);
-    });
 }
 
 arrancar().catch(err => {
