@@ -7,12 +7,13 @@
  * Instancias activas:
  *   wsp-clientes  → Puerto 3001 → Campañas de marketing a clientesclub
  *   wsp-crmbot    → Puerto 3003 → Bot CRM híbrido (keywords + TF-IDF + Naive Bayes)
+ *   wsp-planilla  → Puerto 3005 → Notificaciones de planilla a colaboradores (Operarios)
  * 
  * Para agregar un número nuevo, copiar el bloque y cambiar:
- *   - name          → nombre único del proceso PM2
- *   - cwd           → ruta de la nueva instancia en el VPS
- *   - env.PORT      → puerto único (3002, 3003, ...)
- *   - env.WSP_TOKEN → token diferente por instancia (definido en cada .env)
+ *   - name             → nombre único del proceso PM2
+ *   - cwd              → ruta de la nueva instancia en el VPS
+ *   - env.PORT         → puerto único (3002, 3004, ...)
+ *   - env.WSP_INSTANCIA → nombre de la instancia
  *
  * Ver README.md → "Múltiples Números WhatsApp" para instrucciones completas.
  */
@@ -24,7 +25,7 @@ module.exports = {
     {
       name: 'wsp-clientes',
       script: 'src/app.js',
-      cwd: '/var/www/wsp-clientes',   // ruta en el VPS
+      cwd: '/var/www/wsp-clientes',
       watch: false,
       instances: 1,
       exec_mode: 'fork',
@@ -36,7 +37,6 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3001,
         WSP_INSTANCIA: 'wsp-clientes'
-        // El resto de variables se leen del .env en cada carpeta
       },
       out_file: './logs/out.log',
       error_file: './logs/error.log',
@@ -67,8 +67,6 @@ module.exports = {
     // },
 
     // ── Instancia 3: CRM Bot (Bot híbrido WhatsApp) ───────────────────────
-    // Usa bot de intenciones con keywords + TF-IDF + Naive Bayes
-    // Setup VPS: ver multi_instancia_wsp.sql y README para configurar .env
     {
       name: 'wsp-crmbot',
       script: 'src/app.js',
@@ -91,6 +89,30 @@ module.exports = {
       merge_logs: true
     },
 
+    // ── Instancia 4: Planilla — Notificaciones a colaboradores ───────────
+    // Envía WhatsApp a Operarios cuando su boleta de pago está disponible.
+    // ERP: modulos/rh/planilla_wsp.php  |  API: /api/wsp/pendientes_planilla.php
+    {
+      name: 'wsp-planilla',
+      script: 'src/app.js',
+      cwd: '/var/www/wsp-planilla',
+      watch: false,
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 10000,
+      max_memory_restart: '800M',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3005,
+        WSP_INSTANCIA: 'wsp-planilla'
+      },
+      out_file: './logs/out.log',
+      error_file: './logs/error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true
+    },
+
   ]
 };
-

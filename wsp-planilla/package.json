@@ -1,0 +1,25 @@
+{
+  "name": "pitaya-whatsapp-planilla",
+  "version": "1.0.0",
+  "description": "Servicio de notificaciones WhatsApp de planilla para colaboradores de Batidos Pitaya",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.34.6",
+    "puppeteer": "^21.0.0",
+    "express": "^4.18.2",
+    "node-cron": "^3.0.3",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "qrcode": "^1.5.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
