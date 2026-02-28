@@ -20,13 +20,15 @@ const MAX_DIA = parseInt(process.env.MAX_MENSAJES_DIA) || 200;
 const MAX_HORA = parseInt(process.env.MAX_MENSAJES_POR_HORA) || 50;
 
 /**
- * Verifica si estamos en horario permitido de envío (7am - 8pm Nicaragua)
+ * Verifica si estamos en horario permitido de envío.
+ * HORA_FIN_ENVIO=24:00 desactiva el límite superior (modo pruebas).
  */
 function enHorarioPermitido() {
     const ahora = new Date();
     const hora = ahora.getHours();
-    const hI = parseInt(process.env.HORA_INICIO_ENVIO?.split(':')[0]) || 7;
-    const hF = parseInt(process.env.HORA_FIN_ENVIO?.split(':')[0]) || 20;
+    const hI = parseInt(process.env.HORA_INICIO_ENVIO?.split(':')[0] ?? '7');
+    const hF = parseInt(process.env.HORA_FIN_ENVIO?.split(':')[0] ?? '20');
+    if (hF >= 24) return hora >= hI;   // sin límite superior
     return hora >= hI && hora < hF;
 }
 
