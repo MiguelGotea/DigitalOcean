@@ -4,7 +4,6 @@ require('dotenv').config();
 const express = require('express');
 const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion } = require('./whatsapp/client');
 const { iniciarWorker } = require('./workers/campaign_worker');
-const { iniciarCRMBot } = require('./workers/crm_bot_worker');
 const { WSP_INSTANCIA } = require('./config/api');
 
 const logApp = (msg) => {
@@ -103,14 +102,8 @@ async function arrancar() {
     iniciarWhatsApp()
         .then((clienteWA) => {
             if (!clienteWA) return;
-
-            if (WSP_INSTANCIA === 'wsp-crmbot') {
-                iniciarCRMBot(clienteWA);
-                logApp('🤖 Modo CRM Bot activo');
-            } else {
-                iniciarWorker();
-                logApp('📣 Modo Campañas activo');
-            }
+            iniciarWorker();
+            logApp('📣 Modo Campañas activo');
         })
         .catch(err => {
             logApp(`❌ Error fatal en flujo de WhatsApp: ${err.message}`);
