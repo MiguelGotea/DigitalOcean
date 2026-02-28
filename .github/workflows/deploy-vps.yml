@@ -1,4 +1,21 @@
-name: 🚀 Deploy WhatsApp Service — DigitalOcean VPS
+name: 🚀 Deploy WhatsApp Services — DigitalOcean VPS
+
+# ════════════════════════════════════════════════════════════
+#  CÓMO AGREGAR UNA NUEVA ENTIDAD:
+#  1. Crear la carpeta   DigitalOcean/wsp-nueva/ con todo el código
+#  2. Copiar el bloque rsync de abajo y cambiar el nombre
+#  3. Agregar "pm2 restart wsp-nueva" en el paso PM2
+#  4. Push → GitHub Actions desplegará automáticamente
+#
+#  PRIMER DEPLOY DE UNA NUEVA ENTIDAD (solo SSH una vez):
+#    ssh root@<IP>
+#    cd /var/www/wsp-nueva
+#    npm install --production
+#    cp .env.example .env && nano .env   ← llenar WSP_TOKEN
+#    pm2 start ecosystem.config.js && pm2 save
+#
+#  Después de eso: todo es push. Cero SSH para código.
+# ════════════════════════════════════════════════════════════
 
 on:
   push:
@@ -17,6 +34,7 @@ jobs:
       with:
         ssh-private-key: ${{ secrets.DO_SSH_KEY }}
 
+    # ── Instancia 1: Campañas de marketing ──────────────────
     - name: 📤 Deploy wsp-clientes → /var/www/wsp-clientes/
       run: |
         rsync -avz \
@@ -27,13 +45,14 @@ jobs:
           --exclude='.gemini/' \
           --exclude='.gitignore' \
           --exclude='node_modules/' \
-          --exclude='auth/' \
           --exclude='logs/' \
           --exclude='.env' \
+          --exclude='.wwebjs_auth*' \
           -e "ssh -o StrictHostKeyChecking=no" \
           ./wsp-clientes/ \
           ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/var/www/wsp-clientes/
 
+    # ── Instancia 2: CRM Bot ─────────────────────────────────
     - name: 📤 Deploy wsp-crmbot → /var/www/wsp-crmbot/
       run: |
         rsync -avz \
@@ -44,18 +63,39 @@ jobs:
           --exclude='.gemini/' \
           --exclude='.gitignore' \
           --exclude='node_modules/' \
-          --exclude='auth/' \
           --exclude='logs/' \
           --exclude='.env' \
+          --exclude='.wwebjs_auth*' \
           -e "ssh -o StrictHostKeyChecking=no" \
           ./wsp-crmbot/ \
           ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/var/www/wsp-crmbot/
 
+    # ── Instancia 3: Notificaciones de planilla ──────────────
+    - name: 📤 Deploy wsp-planilla → /var/www/wsp-planilla/
+      run: |
+        rsync -avz \
+          --exclude='.git/' \
+          --exclude='.github/' \
+          --exclude='.scripts/' \
+          --exclude='.agent/' \
+          --exclude='.gemini/' \
+          --exclude='.gitignore' \
+          --exclude='node_modules/' \
+          --exclude='logs/' \
+          --exclude='.env' \
+          --exclude='.wwebjs_auth*' \
+          -e "ssh -o StrictHostKeyChecking=no" \
+          ./wsp-planilla/ \
+          ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/var/www/wsp-planilla/
+
+    # ── Reinicio PM2 (solo instancias activas) ───────────────
     - name: 🔁 Reiniciar instancias PM2
       run: |
         ssh -o StrictHostKeyChecking=no ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} << 'EOF'
-          pm2 restart wsp-clientes
-          pm2 restart wsp-crmbot
+          # Reiniciar solo si el proceso está registrado en PM2
+          pm2 restart wsp-clientes  --update-env || true
+          pm2 restart wsp-crmbot    --update-env || true
+          pm2 restart wsp-planilla  --update-env || true
           pm2 save
           echo "---"
           pm2 list
@@ -63,7 +103,8 @@ jobs:
 
     - name: ✅ Deploy completado
       run: |
-        echo "✅ Deploy completado exitosamente"
-        echo "📁 wsp-clientes → /var/www/wsp-clientes/"
-        echo "📁 wsp-crmbot   → /var/www/wsp-crmbot/"
+        echo "✅ Deploy completado"
+        echo "📁 wsp-clientes  → /var/www/wsp-clientes/"
+        echo "📁 wsp-crmbot    → /var/www/wsp-crmbot/"
+        echo "📁 wsp-planilla  → /var/www/wsp-planilla/"
         echo "🌐 VPS: ${{ secrets.DO_HOST }}"
