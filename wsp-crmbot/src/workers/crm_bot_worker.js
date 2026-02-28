@@ -54,8 +54,22 @@ function iniciarCRMBot(cliente) {
             // Si el bot debe responder, enviar el mensaje
             if (data.responder && data.texto_respuesta) {
                 const chatId = msg.from; // ej: 50588888888@c.us
-                await cliente.sendMessage(chatId, data.texto_respuesta);
-                console.log(`🤖 Bot respondió a ${numero_cliente}: "${data.texto_respuesta.substring(0, 60)}"`);
+
+                if (data.media_url) {
+                    try {
+                        const { MessageMedia } = require('whatsapp-web.js');
+                        const media = await MessageMedia.fromUrl(data.media_url);
+                        await cliente.sendMessage(chatId, media, { caption: data.texto_respuesta });
+                        console.log(`🤖 Bot respondió con imagen a ${numero_cliente}`);
+                    } catch (e) {
+                        console.error(`⚠️ Error al enviar imagen al cliente ${numero_cliente}:`, e.message);
+                        // Fallback: enviar solo el texto si falla la imagen
+                        await cliente.sendMessage(chatId, data.texto_respuesta);
+                    }
+                } else {
+                    await cliente.sendMessage(chatId, data.texto_respuesta);
+                    console.log(`🤖 Bot respondió a ${numero_cliente}: "${data.texto_respuesta.substring(0, 60)}"`);
+                }
             }
 
         } catch (err) {
