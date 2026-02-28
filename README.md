@@ -27,37 +27,49 @@ WhatsApp Web
 
 ```
 .github/workflows/deploy-vps.yml        # CI/CD: push → rsync al VPS → PM2 reload
-wsp-clientes/                           # Código instancia Marketing
-├── src/                                # Lógica del bot (Express + Workers)
-├── scripts/                            # SCRIPTS DE AUTOMATIZACIÓN
-│   ├── setup.sh                        # Instalación VPS Ubuntu desde cero
-│   ├── nuevo_numero_wsp.sh             # Desplegar nueva instancia en segundos
-│   └── test_api_connection.js          # Verifica conectividad VPS → API
+scripts/                                # Scripts de administración del VPS (no específicos de instancia)
+├── setup.sh                            # Instalación VPS Ubuntu desde cero (ejecutar UNA VEZ)
+└── test_api_connection.js              # Verifica conectividad VPS → API
+wsp-clientes/                           # Instancia: Campañas marketing → PM2 :3001
+├── src/                                # Código fuente propio
 ├── .env.example                        # Variables requeridas
+├── ecosystem.config.js                 # Config PM2 de TODAS las instancias
 └── package.json
-wsp-crmbot/                             # Código instancia Bot CRM
-├── src/
-└── ... (estructura idéntica a wsp-clientes)
+wsp-crmbot/                             # Instancia: Bot CRM → PM2 :3003
+├── src/                                # Código fuente propio (independiente)
+├── .env.example
+└── package.json
+wsp-planilla/                           # Instancia: Notif. planilla → PM2 :3005
+├── src/                                # Código fuente propio (independiente)
+├── .env.example
+└── package.json
 ```
 
-### Estructura en el VPS (Opción A — múltiples instancias)
+> **Principio de independencia:** Cada `wsp-*/src/` es completamente autónomo. No comparte código con otras instancias. Si necesitas cambiar una, no afectas las demás.
+
+
+### Estructura en el VPS
 
 ```
 /var/www/
-├── wsp-clientes/          # Instancia 1 — Campañas a clientesclub     → PM2: wsp-clientes  :3001
+├── wsp-clientes/          # PM2: wsp-clientes :3001 — Campañas marketing
 │   ├── src/               # Código fuente (sincronizado desde GitHub)
-│   ├── .env               # Variables específicas de esta instancia
-│   ├── .wwebjs_auth/      # Sesión WhatsApp del número de marketing
+│   ├── .env               # Variables de esta instancia (NO en GitHub)
+│   ├── .wwebjs_auth_wsp-clientes/  # Sesión WhatsApp (NO en GitHub)
 │   └── logs/
-│
-└── wsp-rrhh/              # Instancia 2 — Planillas a colaboradores   → PM2: wsp-rrhh      :3002  (FUTURO)
-    ├── src/
-    ├── .env
-    ├── .wwebjs_auth/      # Sesión WhatsApp del número de RRHH (sesión separada)
-    └── logs/
+├── wsp-crmbot/            # PM2: wsp-crmbot :3003 — Bot CRM
+│   ├── src/
+│   ├── .env
+│   └── logs/
+├── wsp-planilla/          # PM2: wsp-planilla :3005 — Notif. planilla
+│   ├── src/
+│   ├── .env
+│   └── logs/
+└── whatsapp-service/      # ⚠️ RESIDUAL del proyecto original (monolito)
+                           # No tiene función — puede borrarse con rm -rf
 ```
 
-> **Principio clave:** Cada instancia es completamente independiente — propio puerto, propia sesión `.wwebjs_auth`, propio `.env`, propios logs. Si una cae, la otra sigue funcionando.
+> **Principio clave:** Cada instancia es completamente independiente — propio puerto, propia sesión, propio `.env`, propios logs. Si una cae, la otra sigue funcionando.
 
 ---
 
