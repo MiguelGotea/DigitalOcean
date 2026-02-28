@@ -32,6 +32,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # 1. Copiar archivos fuente desde instancia base
 echo ""
 echo "📁 Copiando archivos desde $SOURCE_DIR..."
+mkdir -p "$TARGET_DIR"
 cp -r "$SOURCE_DIR/src" "$TARGET_DIR/"
 cp "$SOURCE_DIR/package.json" "$TARGET_DIR/"
 cp "$SOURCE_DIR/package-lock.json" "$TARGET_DIR/" 2>/dev/null || true
