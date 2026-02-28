@@ -23,12 +23,13 @@ function delayAleatorio(minSeg, maxSeg) {
 
 /**
  * Personaliza el mensaje reemplazando variables
- * Variables disponibles: {{nombre}}, {{sucursal}}
+ * Variables disponibles: {{nombre}}, {{sucursal}}, {{fecha_planilla}}
  */
 function personalizarMensaje(plantilla, datos) {
     return plantilla
         .replace(/\{\{nombre\}\}/gi, datos.nombre || 'Cliente')
-        .replace(/\{\{sucursal\}\}/gi, datos.sucursal || '');
+        .replace(/\{\{sucursal\}\}/gi, datos.sucursal || '')
+        .replace(/\{\{fecha_planilla\}\}/gi, datos.fecha_planilla || '');
 }
 
 /**
@@ -48,7 +49,8 @@ async function enviarLote(client, campana, destinatarios, reportarResultado) {
         const numeroWA = formatearNumeroWA(dest.telefono);
         const mensajePersonal = personalizarMensaje(campana.mensaje, {
             nombre: dest.nombre,
-            sucursal: dest.sucursal || ''
+            sucursal: dest.sucursal || '',
+            fecha_planilla: dest.fecha_planilla || ''
         });
 
         let resultado = 'exito';
