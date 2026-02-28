@@ -63,17 +63,36 @@ fi
 # 4. Crear carpeta de logs
 mkdir -p "$TARGET_DIR/logs"
 
-# 5. Agregar al PM2 (sin arrancar aún — esperar configurar .env)
+# 5. Agregar al PM2 usando ecosystem temporal (--out/--error no existen como flags en PM2 moderno)
 echo ""
 echo "🔧 Registrando en PM2..."
-pm2 start "$TARGET_DIR/src/app.js" \
-    --name "$NOMBRE" \
-    --cwd "$TARGET_DIR" \
-    --log-date-format "YYYY-MM-DD HH:mm:ss" \
-    --out "$TARGET_DIR/logs/out.log" \
-    --error "$TARGET_DIR/logs/error.log" \
-    --env NODE_ENV=production
+cat > "$TARGET_DIR/ecosystem.config.js" << ECOEOF
+module.exports = {
+  apps: [{
+    name:             '${NOMBRE}',
+    script:           'src/app.js',
+    cwd:              '${TARGET_DIR}',
+    watch:            false,
+    instances:        1,
+    exec_mode:        'fork',
+    autorestart:      true,
+    max_restarts:     10,
+    restart_delay:    10000,
+    max_memory_restart: '800M',
+    env: {
+      NODE_ENV:      'production',
+      PORT:          ${PUERTO},
+      WSP_INSTANCIA: '${NOMBRE}'
+    },
+    out_file:        './logs/out.log',
+    error_file:      './logs/error.log',
+    log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    merge_logs:      true
+  }]
+};
+ECOEOF
 
+pm2 start "$TARGET_DIR/ecosystem.config.js"
 pm2 save
 
 echo ""
