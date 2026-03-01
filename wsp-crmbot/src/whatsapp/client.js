@@ -128,6 +128,22 @@ async function iniciarWhatsApp() {
         estaIniciando = false;
         qrBase64 = null;
         await reportarEstadoVPS('conectado', null, numero);
+
+        // --- DEEP DEBUGGING: Escuchar errores internos de la página de Chrome ---
+        try {
+            if (clienteWA.pupPage) {
+                clienteWA.pupPage.on('error', err => {
+                    logMsg(`🔴 [CRITICAL P-ERROR] La página de Chrome hizo crash: ${err.message}`);
+                    resetearSesion().catch(e => logMsg(`Error al intentar auto-recuperar: ${e.message}`));
+                });
+                clienteWA.pupPage.on('pageerror', pageErr => {
+                    logMsg(`⚠️ [PAGE-ERROR] Error JS dentro de WhatsApp Web: ${pageErr.message}`);
+                });
+                logMsg(`🔍 [ID:${currentInitId}] Monitoreo profundo de la página Chrome activado.`);
+            }
+        } catch (e) {
+            logMsg(`⚠️ No se pudo inyectar el monitoreo de página: ${e.message}`);
+        }
     });
 
     clienteWA.on('auth_failure', async (msg) => {
