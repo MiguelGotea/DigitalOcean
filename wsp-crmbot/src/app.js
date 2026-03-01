@@ -128,6 +128,14 @@ async function arrancar() {
                         if (realWaState === 'TIMEOUT' || realWaState === 'UNPAIRED') {
                             logApp(`⚠️  El estado real de WA reportó ${realWaState} — forzando reset_solicitado falso pero es preocupante`);
                         }
+
+                        // Forzar "en línea" para mantener viva la conexión WebSocket de WhatsApp Web
+                        try {
+                            await cliente.sendPresenceAvailable();
+                        } catch (presenceErr) {
+                            // Ignorar si falla el presence
+                        }
+
                     } catch (e) {
                         realWaState = `ERROR: ${e.message}`;
                         logApp(`🚨 WhatsApp congelado / Inaccesible -> ${e.message}. Forzando reset...`);
