@@ -96,7 +96,11 @@ async function iniciarWhatsApp() {
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-gpu'
+                '--disable-gpu',
+                // PREVENIR BACKGROUND THROTTLING (CAUSA DE DESCONEXIONES LARGAS DE INACTIVIDAD)
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding'
             ]
         }
     });
@@ -132,6 +136,11 @@ async function iniciarWhatsApp() {
         estadoActual = 'desconectado';
         estaIniciando = false;
         await reportarEstadoVPS('desconectado', null);
+    });
+
+    clienteWA.on('change_state', state => {
+        if (currentInitId !== sessionIntentId) return;
+        logMsg(`🔄 [ID:${currentInitId}] WhatsApp cambió de estado de red/sesión internamente: ${state}`);
     });
 
     clienteWA.on('disconnected', async (reason) => {
