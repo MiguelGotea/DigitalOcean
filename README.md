@@ -427,3 +427,46 @@ pm2 restart wsp-planilla --update-env
 const hI = parseInt(process.env.HORA_INICIO_ENVIO?.split(':')[0] ?? '7');
 ```
 > `HORA_FIN_ENVIO=24:00` desactiva el límite superior de horario (útil para pruebas).
+
+---
+
+### 13. Desconexión silenciosa tras minutos de inactividad (Zombie Bot)
+
+**Problema:** El Heartbeat dice `conectado`, pero el bot no envía ni recibe mensajes después de ~10-15 minutos sin interactuar.
+
+**Causa:** Linux y Chrome aplican *Background Throttling* a la pestaña headless oculta para ahorrar CPU/RAM, congelando el WebSocket de WhatsApp Web. Adicionalmente, WhatsApp puede cerrar la conexión en sus servidores si no detecta actividad o presencia ("En línea").
+
+**Solución Implementada (Obligatoria para toda nueva instancia):**
+
+1. **Banderas Anti-Throttling (`client.js`)**:
+   En la inicialización de `puppeteer`, se requieren estas flags vitales:
+   ```javascript
+   args: [
+       // ... otras flags ...
+       '--disable-background-timer-throttling',
+       '--disable-backgrounding-occluded-windows',
+       '--disable-renderer-backgrounding'
+   ]
+   ```
+
+2. **Monitoreo de Congelamiento Interno (`app.js`)**:
+   Dentro del `setInterval` de 60s, obligar a Puppeteer a evaluar un script en la página con un timeout para cazar cuelgues, y reportarlo en el log (`engine: CONNECTED`):
+   ```javascript
+   // app.js -> setInterval(..., 60000)
+   let realWaState = await Promise.race([
+       cliente.getState(),
+       new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_GET_STATE')), 10000))
+   ]);
+   ```
+
+3. **Keep-Alive Heartbeat (`app.js`)**:
+   Enviar el estado "En línea" forzoso cada 60 segundos para evitar que Meta cierre el socket:
+   ```javascript
+   await cliente.sendPresenceAvailable();
+   ```
+
+4. **Deep-Debugging Crash Hooks (`client.js`)**:
+   Escuchar el objeto nativo de página de Chrome en el evento `ready` para matar Node.js si la página tira un `Aw, Snap!`:
+   ```javascript
+   clienteWA.pupPage.on('error', err => { /* forzar resetearSesion() */ });
+   ```
