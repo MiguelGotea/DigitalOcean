@@ -85,7 +85,7 @@ async function iniciarWhatsApp() {
             remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018911162-alpha.html'
         },
         puppeteer: {
-            headless: true,
+            headless: 'new',
             executablePath,
             dumpio: true,
             args: [
@@ -93,12 +93,14 @@ async function iniciarWhatsApp() {
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
+                // PREVENIR BACKGROUND THROTTLING (CAUSA DE DESCONEXIONES LARGAS DE INACTIVIDAD)
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
                 '--no-zygote',
                 '--no-first-run',
                 '--disable-extensions',
                 '--disable-background-networking',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
                 '--disable-breakpad',
                 '--disable-component-update',
                 '--disable-domain-reliability',
@@ -122,19 +124,42 @@ async function iniciarWhatsApp() {
     });
 
     clienteWA.on('ready', async () => {
+        if (currentInitId !== sessionIntentId) return;
         const numero = clienteWA.info?.wid?.user || null;
-        logMsg(`✅ WhatsApp Web (wsp-planilla) conectado — Número: ${numero || 'desconocido'}`);
+        logMsg(`✅ [ID:${currentInitId}] WhatsApp Web conectado y listo — Número: ${numero || 'desconocido'}`);
         estadoActual = 'conectado';
         estaIniciando = false;
         qrBase64 = null;
         await reportarEstadoVPS('conectado', null, numero);
+
+        // --- DEEP DEBUGGING: Escuchar errores internos de la página de Chrome ---
+        try {
+            if (clienteWA.pupPage) {
+                clienteWA.pupPage.on('error', err => {
+                    logMsg(`🔴 [CRITICAL P-ERROR] La página de Chrome hizo crash: ${err.message}`);
+                    resetearSesion().catch(e => logMsg(`Error al intentar auto-recuperar: ${e.message}`));
+                });
+                clienteWA.pupPage.on('pageerror', pageErr => {
+                    logMsg(`⚠️ [PAGE-ERROR] Error JS dentro de WhatsApp Web: ${pageErr.message}`);
+                });
+                logMsg(`🔍 [ID:${currentInitId}] Monitoreo profundo de la página Chrome activado.`);
+            }
+        } catch (e) {
+            logMsg(`⚠️ No se pudo inyectar el monitoreo de página: ${e.message}`);
+        }
     });
 
     clienteWA.on('auth_failure', async (msg) => {
-        logMsg(`❌ Fallo de autenticación: ${msg}`);
+        if (currentInitId !== sessionIntentId) return;
+        logMsg(`❌ [ID:${currentInitId}] Fallo de autenticación: ${msg}`);
         estadoActual = 'desconectado';
         estaIniciando = false;
         await reportarEstadoVPS('desconectado', null);
+    });
+
+    clienteWA.on('change_state', state => {
+        if (currentInitId !== sessionIntentId) return;
+        logMsg(`🔄 [ID:${currentInitId}] WhatsApp cambió de estado de red/sesión internamente: ${state}`);
     });
 
     clienteWA.on('disconnected', async (reason) => {

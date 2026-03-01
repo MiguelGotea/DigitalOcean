@@ -96,8 +96,40 @@ async function arrancar() {
     setInterval(async () => {
         try {
             const estado = obtenerEstadoActual();
+            let realWaState = 'N/A';
+
+            // Intento de "despertar" WhatsApp y verificar que el engine no está congelado
+            if (estado === 'conectado') {
+                const cliente = obtenerCliente();
+                if (cliente) {
+                    try {
+                        // Promise.race para evitar quedarnos colgados si la pestaña murió
+                        realWaState = await Promise.race([
+                            cliente.getState(),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_GET_STATE')), 10000))
+                        ]);
+                        if (realWaState === 'TIMEOUT' || realWaState === 'UNPAIRED') {
+                            logApp(`⚠️  El estado real de WA reportó ${realWaState} — forzando reset_solicitado falso pero es preocupante`);
+                        }
+
+                        // Forzar "en línea" para mantener viva la conexión WebSocket de WhatsApp Web
+                        try {
+                            await cliente.sendPresenceAvailable();
+                        } catch (presenceErr) {
+                            // Ignorar si falla el presence
+                        }
+
+                    } catch (e) {
+                        realWaState = `ERROR: ${e.message}`;
+                        logApp(`🚨 WhatsApp congelado / Inaccesible -> ${e.message}. Forzando reset...`);
+                        await resetearSesion();
+                        return; // Salir de esta iteración
+                    }
+                }
+            }
+
             const data = await reportarEstadoVPS(estado, null);
-            logApp(`💓 Heartbeat [${WSP_INSTANCIA}] — estado: ${estado}`);
+            logApp(`💓 Heartbeat [${WSP_INSTANCIA}] — estado: ${estado} | engine: ${realWaState}`);
 
             if (data && data.reset_solicitado) {
                 logApp('🔄 Detectada solicitud de reset en heartbeat — ejecutando...');
