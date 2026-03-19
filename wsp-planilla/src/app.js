@@ -4,6 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion } = require('./whatsapp/client');
 const { iniciarWorkerPlanilla } = require('./workers/planilla_worker');
+const { iniciarKeepalive } = require('./workers/keepalive_worker');
 const { WSP_INSTANCIA } = require('./config/api');
 
 const logApp = (msg) => {
@@ -86,7 +87,9 @@ async function arrancar() {
         .then((clienteWA) => {
             if (!clienteWA) return;
             iniciarWorkerPlanilla();
+            iniciarKeepalive(clienteWA);
             logApp('📋 Modo Planilla activo — notificaciones a colaboradores');
+            logApp('🔄 Keepalive activo (cada 50m)');
         })
         .catch(err => {
             logApp(`❌ Error fatal en flujo de WhatsApp: ${err.message}`);
