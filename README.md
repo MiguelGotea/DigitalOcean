@@ -136,7 +136,11 @@ npm install --production
 cp .env.example .env && nano .env
 # Llenar: WSP_TOKEN (token único), PORT, WSP_INSTANCIA
 
-# Registrar en PM2
+# 4. Abrir puerto en FIREWALL (OBLIGATORIO)
+# Sin este paso, el ERP no podrá hacer "Ping" ni enviar mensajes manuales
+sudo ufw allow XXXX/tcp
+
+# 5. Registrar en PM2
 pm2 start ecosystem.config.js
 pm2 save
 ```
@@ -146,6 +150,8 @@ pm2 save
 ### Checklist nueva instancia
 
 - [ ] Puerto único no usado (3007, 3009…)
+- [ ] **Abrir puerto en Firewall DigitalOcean** (Inbound TCP) y asignar Droplet.
+- [ ] **Abrir puerto en Firewall VPS (UFW)**: `sudo ufw allow XXXX/tcp`.
 - [ ] Token único en `.env` — la API lo usa para identificar la instancia
 - [ ] `clientId` único en `client.js` → `LocalAuth({ clientId: 'wsp-nueva' })`
 - [ ] Workers propios — sin importar archivos de otras instancias
@@ -221,6 +227,15 @@ DELAY_MAX_SEGUNDOS=25
 | `pendientes_planilla.php` | GET | Token | Notificaciones de planilla pendientes |
 | `actualizar_planilla.php` | POST | Token | VPS reporta resultado de planilla |
 | `registrar_sesion.php` | POST | Token | Heartbeat + estado + QR base64 |
+
+## Endpoints del VPS (Llamados por el ERP)
+| Endpoint | Método | Puerto | Descripción |
+|----------|--------|--------|-------------|
+| `/health` | GET | 300X | Verifica si Express está vivo |
+| `/status` | GET | 300X | Estado interno y QR |
+| `/send` | POST | 300X | Envío manual (CRM) |
+| `/ping` | POST | 300X | Prueba de conexión + Notif. a grupo |
+| `/reset` | POST | 300X | Fuerza cierre y nuevo QR |
 
 ---
 
