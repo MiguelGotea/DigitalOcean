@@ -150,6 +150,12 @@ async function iniciarWhatsApp() {
         }
     });
 
+    clienteWA.on('message', msg => {
+        if (msg.from.endsWith('@g.us')) {
+            console.log(`[GRUPO_DEBUG] ID del grupo: ${msg.from} | Nombre: ${msg.author || msg.from}`);
+        }
+    });
+
     clienteWA.on('auth_failure', async (msg) => {
         if (currentInitId !== sessionIntentId) return;
         logMsg(`❌ [ID:${currentInitId}] Fallo de autenticación: ${msg}`);
