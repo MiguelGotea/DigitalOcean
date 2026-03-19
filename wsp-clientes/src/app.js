@@ -74,6 +74,37 @@ app.post('/send', validarToken, async (req, res) => {
     }
 });
 
+// ── Ping de prueba (ERP → cliente + notificación a grupo) ──
+app.post('/ping', validarToken, async (req, res) => {
+    const numero = req.body.to || req.body.numero;
+    const texto = req.body.message || req.body.texto;
+    const agente = req.body.agente || 'Usuario del ERP';
+
+    if (!numero || !texto) return res.status(400).json({ error: 'numero/to y texto/message son requeridos' });
+
+    try {
+        const cliente = obtenerCliente();
+        if (!cliente) return res.status(503).json({ success: false, error: 'WhatsApp no conectado' });
+
+        const chatId = numero.includes('@c.us') ? numero : `${numero}@c.us`;
+
+        // 1. Enviar el mensaje de prueba al destinatario real
+        await cliente.sendMessage(chatId, texto);
+
+        // 2. Notificar al grupo de monitoreo (KEEPALIVE_DESTINO)
+        const DESTINO = process.env.KEEPALIVE_DESTINO;
+        if (DESTINO) {
+            const grupoId = DESTINO.includes('@') ? DESTINO : `${DESTINO}@c.us`;
+            const aviso = `⚡ *Prueba de Ping Manual*\nDe: ${agente}\nAl número: ${numero}\nMensaje: ${texto}`;
+            await cliente.sendMessage(grupoId, aviso).catch(() => {});
+        }
+
+        res.json({ success: true, numero, chatId });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // ── Reset de sesion (cambiar número) ──
 app.post('/reset', validarToken, async (req, res) => {
     try {
