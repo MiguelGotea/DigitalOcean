@@ -3,7 +3,7 @@
 /**
  * Worker de Keepalive por Mensaje Real
  * Propósito: Evitar que la sesión de WhatsApp Web entre en modo zombie por inactividad.
- * Envía un mensaje corto cada 50 minutos a un destino configurado.
+ * Envía un mensaje corto cada 15 minutos a un destino configurado.
  */
 
 const iniciarKeepalive = (cliente) => {
@@ -43,13 +43,13 @@ const iniciarKeepalive = (cliente) => {
     };
 
     // 1. Esperar 5 minutos tras arrancar para que la sesión se estabilice
-    console.log(`[${INSTANCIA}] 🕒 Keepalive programado: inicio en 5m, frecuencia cada 50m`);
+    console.log(`[${INSTANCIA}] 🕒 Keepalive programado: inicio en 5m, frecuencia cada 15m`);
     
     setTimeout(() => {
         enviarKeepalive();
         
-        // 2. Ejecutar cada 50 minutos
-        setInterval(enviarKeepalive, 50 * 60 * 1000);
+        // 2. Ejecutar cada 15 minutos
+        setInterval(enviarKeepalive, 15 * 60 * 1000);
     }, 5 * 60 * 1000);
 };
 
