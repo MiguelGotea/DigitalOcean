@@ -87,7 +87,6 @@ async function iniciarWhatsApp() {
         puppeteer: {
             headless: 'new',
             executablePath,
-            dumpio: true,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -177,11 +176,12 @@ async function iniciarWhatsApp() {
         }
     }, 300_000);
 
-    logMsg(`🏁 [ID:${currentInitId}] Preparando clienteWA.initialize() en 15 segundos...`);
-    await new Promise(r => setTimeout(r, 15_000));
+    const staggerDelay = 5_000;
+    logMsg(`🏁 [ID:${currentInitId}] Preparando clienteWA.initialize() en ${staggerDelay / 1000} segundos...`);
+    await new Promise(r => setTimeout(r, staggerDelay));
 
     if (currentInitId !== sessionIntentId) {
-        logMsg(`🛑 [ID:${currentInitId}] Inicialización cancelada.`);
+        logMsg(`🛑 [ID:${currentInitId}] Inicialización cancelada (detectado reset o nuevo intento).`);
         estaIniciando = false;
         return null;
     }
@@ -207,6 +207,9 @@ async function iniciarWhatsApp() {
 
 /**
  * Notifica a la API el estado actual del VPS/WhatsApp
+ * @param {string} estado - conectado|qr_pendiente|desconectado|inicializando
+ * @param {string|null} qr - QR en base64 (solo cuando qr_pendiente)
+ * @param {string|null} numero - Número WhatsApp vinculado (solo cuando conectado)
  */
 async function reportarEstadoVPS(estado, qr, numero = null) {
     try {
@@ -228,6 +231,7 @@ async function reportarEstadoVPS(estado, qr, numero = null) {
     }
 }
 
+// ── Getters para el servidor Express interno ──
 function obtenerEstado() {
     return {
         estado: estadoActual,
@@ -242,11 +246,13 @@ function obtenerCliente() { return clienteWA; }
 
 /**
  * Reinicia completamente la sesión WhatsApp (para cambio de número)
+ * Destruye el cliente actual, borra .wwebjs_auth y re-inicializa (genera nuevo QR)
  */
 async function resetearSesion() {
-    sessionIntentId++;
+    sessionIntentId++; // Invalidar cualquier inicialización en cola
     logMsg(`🔄 [ID:${sessionIntentId}] Iniciando reset de sesión WhatsApp (wsp-planilla)...`);
 
+    // 1. Destruir cliente actual (sin esperar demasiado)
     if (clienteWA) {
         logMsg('🔌 Destruyendo cliente anterior...');
         try {
@@ -260,6 +266,7 @@ async function resetearSesion() {
         clienteWA = null;
     }
 
+    // 2. Borrar la carpeta de sesión local de forma radical
     const fs = require('fs');
     const path = require('path');
     const { WSP_INSTANCIA } = require('../config/api');
@@ -269,23 +276,27 @@ async function resetearSesion() {
     if (fs.existsSync(authPath)) {
         try {
             fs.rmSync(authPath, { recursive: true, force: true });
-            logMsg(`✅ Carpeta ${authPath} eliminada.`);
+            logMsg(`✅ Carpeta ${authPath} eliminada satisfactoriamente`);
         } catch (e) {
-            logMsg(`❌ No se pudo eliminar carpeta de sesión: ${e.message}`);
+            logMsg(`❌ No se pudo eliminar la carpeta de sesión: ${e.message}`);
         }
     }
 
+    // 3. Matar procesos de Chrome huérfanos residuo de esta instancia
+    // Pattern refinado: solo chrome que use este data-dir (evita matar el proceso Node)
     try {
         const { execSync } = require('child_process');
         logMsg(`🧹 Limpiando procesos Chrome de ${WSP_INSTANCIA}...`);
-        execSync(`pkill -9 -f ".wwebjs_auth_${WSP_INSTANCIA}" || true`);
+        execSync(`pkill -9 -f "chrome.*\.wwebjs_auth_${WSP_INSTANCIA}" || true`);
     } catch (e) { }
 
+    // 4. Actualizar estado y re-notificar
     estadoActual = 'desconectado';
     qrBase64 = null;
     estaIniciando = false;
     await reportarEstadoVPS('desconectado', null);
 
+    // 5. Re-inicializar 
     logMsg('⏳ Re-inicializando en 5 segundos...');
     setTimeout(iniciarWhatsApp, 5_000);
 }

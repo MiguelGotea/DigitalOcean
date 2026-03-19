@@ -88,7 +88,6 @@ async function iniciarWhatsApp() {
         puppeteer: {
             headless: 'new',
             executablePath,
-            dumpio: true,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -181,8 +180,8 @@ async function iniciarWhatsApp() {
         }
     }, 300_000);
 
-    const staggerDelay = WSP_INSTANCIA === 'wsp-crmbot' ? 45_000 : 15_000;
-    logMsg(`🏁 [ID:${currentInitId}] Preparando clienteWA.initialize() en ${staggerDelay / 1000} segundos para evitar saturar RAM...`);
+    const staggerDelay = 5_000;
+    logMsg(`🏁 [ID:${currentInitId}] Preparando clienteWA.initialize() en ${staggerDelay / 1000} segundos...`);
     await new Promise(r => setTimeout(r, staggerDelay));
 
     // VERIFICAR QUE NO HAYA HABIDO UN RESET EN EL INTERIN
@@ -291,10 +290,11 @@ async function resetearSesion() {
     }
 
     // 3. Matar procesos de Chrome huérfanos residuo de esta instancia
+    // Pattern refinado: solo chrome que use este data-dir (evita matar el proceso Node)
     try {
         const { execSync } = require('child_process');
         logMsg(`🧹 Limpiando procesos Chrome de ${WSP_INSTANCIA}...`);
-        execSync(`pkill -9 -f ".wwebjs_auth_${WSP_INSTANCIA}" || true`);
+        execSync(`pkill -9 -f "chrome.*\.wwebjs_auth_${WSP_INSTANCIA}" || true`);
     } catch (e) { }
 
     // 4. Actualizar estado y re-notificar
