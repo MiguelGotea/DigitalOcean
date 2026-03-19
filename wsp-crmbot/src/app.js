@@ -108,7 +108,8 @@ app.post('/ping', validarToken, async (req, res) => {
 // ── Reset de sesion (cambiar número) ──
 app.post('/reset', validarToken, async (req, res) => {
     try {
-        await resetearSesion();
+        // RESET MANUAL: Borrar carpeta de sesión (borrarSesion = true)
+        await resetearSesion(true);
         res.json({ success: true, mensaje: 'Sesion reiniciada, generando QR...' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -136,8 +137,8 @@ async function arrancar() {
             if (!clienteWA) return;
             iniciarCRMBot(clienteWA);
             iniciarKeepalive(clienteWA);
-            logApp('🤖 Modo CRM Bot activo');
-            logApp('🔄 Keepalive activo (cada 50m)');
+            logApp('📣 Bot CRM activo');
+            logApp('🔄 Keepalive activo');
         })
         .catch(err => {
             logApp(`❌ Error fatal en flujo de WhatsApp: ${err.message}`);
@@ -172,8 +173,9 @@ async function arrancar() {
 
                     } catch (e) {
                         realWaState = `ERROR: ${e.message}`;
-                        logApp(`🚨 WhatsApp congelado / Inaccesible -> ${e.message}. Forzando reset...`);
-                        await resetearSesion();
+                        logApp(`🚨 WhatsApp congelado / Inaccesible -> ${e.message}. Forzando AUTO-RECUPERACIÓN...`);
+                        // AUTO-RECUPERACIÓN: NO borrar carpeta de sesión (borrarSesion = false)
+                        await resetearSesion(false);
                         return; // Salir de esta iteración
                     }
                 }
@@ -184,7 +186,8 @@ async function arrancar() {
 
             if (data && data.reset_solicitado) {
                 logApp('🔄 Detectada solicitud de reset en heartbeat — ejecutando...');
-                await resetearSesion();
+                // RESET SOLICITADO: Borrar carpeta de sesión (borrarSesion = true)
+                await resetearSesion(true);
             }
         } catch (e) {
             logApp(`⚠️  Heartbeat falló: ${e.message}`);

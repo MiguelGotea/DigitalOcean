@@ -59,7 +59,6 @@ app.get('/qr', (req, res) => {
 
 // ── Envío manual (CRM humano → cliente) ──
 app.post('/send', validarToken, async (req, res) => {
-    // Acepta {to, message} o {numero, texto}
     const numero = req.body.to || req.body.numero;
     const texto = req.body.message || req.body.texto;
     if (!numero || !texto) return res.status(400).json({ error: 'numero/to y texto/message son requeridos' });
@@ -94,7 +93,7 @@ app.post('/ping', validarToken, async (req, res) => {
         // 2. Notificar al grupo de monitoreo (KEEPALIVE_DESTINO)
         const DESTINO = process.env.KEEPALIVE_DESTINO;
         if (DESTINO) {
-            const grupoId = DESTINO.includes('@') ? DESTINO : `${DESTINO}@c.us`;
+            const grupoId = DESTINO.includes('@') ? DESTINO : `${DESTINO}@g.us`;
             const aviso = `⚡ *Prueba de Ping Manual*\nDe: ${agente}\nAl número: ${numero}\nMensaje: ${texto}`;
             await cliente.sendMessage(grupoId, aviso).catch(() => {});
         }
@@ -108,7 +107,8 @@ app.post('/ping', validarToken, async (req, res) => {
 // ── Reset de sesion (cambiar número) ──
 app.post('/reset', validarToken, async (req, res) => {
     try {
-        await resetearSesion();
+        // RESET MANUAL: Borrar carpeta de sesión (borrarSesion = true)
+        await resetearSesion(true);
         res.json({ success: true, mensaje: 'Sesion reiniciada, generando QR...' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -137,7 +137,7 @@ async function arrancar() {
             iniciarWorker();
             iniciarKeepalive(clienteWA);
             logApp('📣 Modo Campañas activo');
-            logApp('🔄 Keepalive activo (cada 50m)');
+            logApp('🔄 Keepalive activo');
         })
         .catch(err => {
             logApp(`❌ Error fatal en flujo de WhatsApp: ${err.message}`);
@@ -172,8 +172,9 @@ async function arrancar() {
 
                     } catch (e) {
                         realWaState = `ERROR: ${e.message}`;
-                        logApp(`🚨 WhatsApp congelado / Inaccesible -> ${e.message}. Forzando reset...`);
-                        await resetearSesion();
+                        logApp(`🚨 WhatsApp congelado / Inaccesible -> ${e.message}. Forzando AUTO-RECUPERACIÓN...`);
+                        // AUTO-RECUPERACIÓN: NO borrar carpeta de sesión (borrarSesion = false)
+                        await resetearSesion(false);
                         return; // Salir de esta iteración
                     }
                 }
@@ -184,7 +185,8 @@ async function arrancar() {
 
             if (data && data.reset_solicitado) {
                 logApp('🔄 Detectada solicitud de reset en heartbeat — ejecutando...');
-                await resetearSesion();
+                // RESET SOLICITADO: Borrar carpeta de sesión (borrarSesion = true)
+                await resetearSesion(true);
             }
         } catch (e) {
             logApp(`⚠️  Heartbeat falló: ${e.message}`);

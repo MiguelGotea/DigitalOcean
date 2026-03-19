@@ -3,7 +3,6 @@
 require('dotenv').config();
 const express = require('express');
 const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion } = require('./whatsapp/client');
-const { iniciarWorkerPlanilla } = require('./workers/planilla_worker');
 const { iniciarKeepalive } = require('./workers/keepalive_worker');
 const { WSP_INSTANCIA } = require('./config/api');
 
@@ -42,7 +41,7 @@ function validarToken(req, res, next) {
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
-        servicio: `pitaya-wsp-planilla (${WSP_INSTANCIA})`,
+        servicio: `pitaya-whatsapp-service (${WSP_INSTANCIA})`,
         hora: new Date().toISOString()
     });
 });
@@ -57,11 +56,17 @@ app.get('/qr', (req, res) => {
     res.json({ qr });
 });
 
-// ── Reset de sesión (cambiar número) ──
-app.post('/reset', validarToken, async (req, res) => {
+// ── Envío manual (ERP → cliente) ──
+app.post('/send', validarToken, async (req, res) => {
+    const numero = req.body.to || req.body.numero;
+    const texto = req.body.message || req.body.texto;
+    if (!numero || !texto) return res.status(400).json({ error: 'numero/to y texto/message son requeridos' });
     try {
-        await resetearSesion();
-        res.json({ success: true, mensaje: 'Sesion reiniciada, generando QR...' });
+        const cliente = obtenerCliente();
+        if (!cliente) return res.status(503).json({ success: false, error: 'WhatsApp no conectado' });
+        const chatId = numero.includes('@c.us') ? numero : `${numero}@c.us`;
+        await cliente.sendMessage(chatId, texto);
+        res.json({ success: true, numero, chatId });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -87,7 +92,7 @@ app.post('/ping', validarToken, async (req, res) => {
         // 2. Notificar al grupo de monitoreo (KEEPALIVE_DESTINO)
         const DESTINO = process.env.KEEPALIVE_DESTINO;
         if (DESTINO) {
-            const grupoId = DESTINO.includes('@') ? DESTINO : `${DESTINO}@c.us`;
+            const grupoId = DESTINO.includes('@') ? DESTINO : `${DESTINO}@g.us`;
             const aviso = `⚡ *Prueba de Ping Manual*\nDe: ${agente}\nAl número: ${numero}\nMensaje: ${texto}`;
             await cliente.sendMessage(grupoId, aviso).catch(() => {});
         }
@@ -98,9 +103,20 @@ app.post('/ping', validarToken, async (req, res) => {
     }
 });
 
-// ── Arranque ──
+// ── Reset de sesion (cambiar número) ──
+app.post('/reset', validarToken, async (req, res) => {
+    try {
+        // RESET MANUAL: Borrar carpeta de sesión (borrarSesion = true)
+        await resetearSesion(true);
+        res.json({ success: true, mensaje: 'Sesion reiniciada, generando QR...' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── Arranque: Express PRIMERO, luego WhatsApp en background ──
 async function arrancar() {
-    logApp(`🚀 Iniciando Pitaya WSP Planilla [${WSP_INSTANCIA}]...`);
+    logApp(`🚀 Iniciando Pitaya WhatsApp Service [${WSP_INSTANCIA}]...`);
 
     // 1. Levantar Express inmediatamente
     await new Promise((resolve) => {
@@ -110,17 +126,16 @@ async function arrancar() {
         });
     });
 
-    logApp('⏳ Esperando 15s antes de arrancar WhatsApp...');
+    logApp('⏳ Esperando 15s antes de arrancar WhatsApp para estabilizar sistema...');
     await new Promise(r => setTimeout(r, 15_000));
 
     // 2. Iniciar WhatsApp en background
     iniciarWhatsApp()
         .then((clienteWA) => {
             if (!clienteWA) return;
-            iniciarWorkerPlanilla();
             iniciarKeepalive(clienteWA);
-            logApp('📋 Modo Planilla activo — notificaciones a colaboradores');
-            logApp('🔄 Keepalive activo (cada 50m)');
+            logApp('📣 Bot Planilla activo');
+            logApp('🔄 Keepalive activo');
         })
         .catch(err => {
             logApp(`❌ Error fatal en flujo de WhatsApp: ${err.message}`);
@@ -155,8 +170,9 @@ async function arrancar() {
 
                     } catch (e) {
                         realWaState = `ERROR: ${e.message}`;
-                        logApp(`🚨 WhatsApp congelado / Inaccesible -> ${e.message}. Forzando reset...`);
-                        await resetearSesion();
+                        logApp(`🚨 WhatsApp congelado / Inaccesible -> ${e.message}. Forzando AUTO-RECUPERACIÓN...`);
+                        // AUTO-RECUPERACIÓN: NO borrar carpeta de sesión (borrarSesion = false)
+                        await resetearSesion(false);
                         return; // Salir de esta iteración
                     }
                 }
@@ -167,7 +183,8 @@ async function arrancar() {
 
             if (data && data.reset_solicitado) {
                 logApp('🔄 Detectada solicitud de reset en heartbeat — ejecutando...');
-                await resetearSesion();
+                // RESET SOLICITADO: Borrar carpeta de sesión (borrarSesion = true)
+                await resetearSesion(true);
             }
         } catch (e) {
             logApp(`⚠️  Heartbeat falló: ${e.message}`);

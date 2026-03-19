@@ -33,7 +33,7 @@ async function iniciarWhatsApp() {
         return;
     }
 
-    logMsg(`📱 [ID:${currentInitId}] Iniciando cliente WhatsApp Web...`);
+    logMsg(`📱 [ID:${currentInitId}] Iniciando cliente WhatsApp Web (wsp-crmbot)...`);
     estaIniciando = true;
     estadoActual = 'inicializando';
     await reportarEstadoVPS('inicializando', null);
@@ -43,10 +43,9 @@ async function iniciarWhatsApp() {
     const path = require('path');
 
     const chromiumPaths = [
-        '/usr/bin/google-chrome-stable',
-        '/usr/bin/google-chrome',
-        '/opt/google/chrome/chrome',       // Alternativa en algunos sistemas
-        '/usr/bin/chromium',
+        '/usr/bin/google-chrome-stable',    // Chrome estable (preferido)
+        '/usr/bin/google-chrome',           // Chrome genérico
+        '/usr/bin/chromium',                // apt en Ubuntu sin snap
     ];
     const executablePath = chromiumPaths.find(p => fs.existsSync(p));
     if (!executablePath) {
@@ -56,30 +55,30 @@ async function iniciarWhatsApp() {
     }
     logMsg(`🌐 Usando navegador: ${executablePath}`);
 
-    // Limpiar SingletonLock si existe recursivamente
+    // Limpiar SingletonLock si existe
     const cleanupLocks = () => {
         const { WSP_INSTANCIA } = require('../config/api');
         const authPath = path.resolve(`.wwebjs_auth_${WSP_INSTANCIA}`);
-        if (!fs.existsSync(authPath)) return;
-
-        logMsg(`🧹 [ID:${currentInitId}] Buscando bloqueos en ${authPath}...`);
-        const findAndRemoveLocks = (dir) => {
+        
+        // Función recursiva para borrar SingletonLock
+        const deleteSingletonLock = (dir) => {
+            if (!fs.existsSync(dir)) return;
             const files = fs.readdirSync(dir);
-            files.forEach(file => {
+            for (const file of files) {
                 const fullPath = path.join(dir, file);
-                if (fs.statSync(fullPath).isDirectory()) {
-                    findAndRemoveLocks(fullPath);
+                if (fs.lstatSync(fullPath).isDirectory()) {
+                    deleteSingletonLock(fullPath);
                 } else if (file === 'SingletonLock') {
                     try {
                         fs.unlinkSync(fullPath);
-                        logMsg(`🔓 [ID:${currentInitId}] SingletonLock eliminado: ${fullPath}`);
+                        logMsg(`🔓 SingletonLock eliminado: ${fullPath}`);
                     } catch (e) {
-                        logMsg(`⚠️  [ID:${currentInitId}] No se pudo borrar lock: ${fullPath}`);
+                        logMsg(`⚠️  Lock ocupado: ${fullPath}`);
                     }
                 }
-            });
+            }
         };
-        try { findAndRemoveLocks(authPath); } catch (e) { }
+        deleteSingletonLock(authPath);
     };
     cleanupLocks();
 
@@ -97,7 +96,6 @@ async function iniciarWhatsApp() {
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
-                // PREVENIR BACKGROUND THROTTLING (CAUSA DE DESCONEXIONES LARGAS DE INACTIVIDAD)
                 '--disable-background-timer-throttling',
                 '--disable-backgrounding-occluded-windows',
                 '--disable-renderer-backgrounding'
@@ -107,14 +105,8 @@ async function iniciarWhatsApp() {
 
     // ── Eventos ──
 
-    clienteWA.on('loading_screen', (percent, message) => {
-        if (currentInitId !== sessionIntentId) return;
-        logMsg(`⏳ [ID:${currentInitId}] Cargando WhatsApp Web: ${percent}% - ${message}`);
-    });
-
     clienteWA.on('qr', async (qr) => {
-        if (currentInitId !== sessionIntentId) return;
-        logMsg(`📷 [ID:${currentInitId}] QR generado — escanéalo desde el ERP`);
+        logMsg('📷 QR generado — escanéalo desde el ERP');
         estadoActual = 'qr_pendiente';
         qrBase64 = await qrcode.toDataURL(qr);
         await reportarEstadoVPS('qr_pendiente', qrBase64);
@@ -134,7 +126,8 @@ async function iniciarWhatsApp() {
             if (clienteWA.pupPage) {
                 clienteWA.pupPage.on('error', err => {
                     logMsg(`🔴 [CRITICAL P-ERROR] La página de Chrome hizo crash: ${err.message}`);
-                    resetearSesion().catch(e => logMsg(`Error al intentar auto-recuperar: ${e.message}`));
+                    // Auto-recuperación NO destructiva (borrarSesion = false)
+                    resetearSesion(false).catch(e => logMsg(`Error al intentar auto-recuperar: ${e.message}`));
                 });
                 clienteWA.pupPage.on('pageerror', pageErr => {
                     logMsg(`⚠️ [PAGE-ERROR] Error JS dentro de WhatsApp Web: ${pageErr.message}`);
@@ -160,13 +153,11 @@ async function iniciarWhatsApp() {
     });
 
     clienteWA.on('disconnected', async (reason) => {
-        logMsg(`⚠️  [ID:${currentInitId}] WhatsApp desconectado: ${reason}`);
+        logMsg(`⚠️  WhatsApp desconectado: ${reason}`);
         estadoActual = 'desconectado';
         estaIniciando = false;
         qrBase64 = null;
         await reportarEstadoVPS('desconectado', null);
-
-        // Reintentar conexión después de un delay
         setTimeout(iniciarWhatsApp, 15_000);
     });
 
@@ -248,12 +239,12 @@ function obtenerQR() { return qrBase64; }
 function obtenerCliente() { return clienteWA; }
 
 /**
- * Reinicia completamente la sesión WhatsApp (para cambio de número)
- * Destruye el cliente actual, borra .wwebjs_auth y re-inicializa (genera nuevo QR)
+ * Reinicia completamente la sesión WhatsApp (para cambio de número o recuperación de errores)
+ * @param {boolean} borrarSesion - Si es true, borra la carpeta .wwebjs_auth (nuke). Si es false, solo reinicia el navegador.
  */
-async function resetearSesion() {
+async function resetearSesion(borrarSesion = false) {
     sessionIntentId++; // Invalidar cualquier inicialización en cola
-    logMsg(`🔄 [ID:${sessionIntentId}] Iniciando reset de sesión WhatsApp...`);
+    logMsg(`🔄 [ID:${sessionIntentId}] Iniciando reset de sesión WhatsApp (borrarCarpeta: ${borrarSesion})...`);
 
     // 1. Destruir cliente actual (sin esperar demasiado)
     if (clienteWA) {
@@ -269,20 +260,24 @@ async function resetearSesion() {
         clienteWA = null;
     }
 
-    // 2. Borrar la carpeta de sesión local de forma radical
+    // 2. Borrar la carpeta de sesión local SOLO si se solicita explícitamente
     const fs = require('fs');
     const path = require('path');
     const { WSP_INSTANCIA } = require('../config/api');
     const authPath = path.resolve(`.wwebjs_auth_${WSP_INSTANCIA}`);
 
-    logMsg(`🗑️  Limpiando carpeta de sesión: ${authPath}`);
-    if (fs.existsSync(authPath)) {
-        try {
-            fs.rmSync(authPath, { recursive: true, force: true });
-            logMsg(`✅ Carpeta ${authPath} eliminada satisfactoriamente`);
-        } catch (e) {
-            logMsg(`❌ No se pudo eliminar la carpeta de sesión: ${e.message}`);
+    if (borrarSesion) {
+        logMsg(`🗑️  Limpiando carpeta de sesión: ${authPath} (NUKE)`);
+        if (fs.existsSync(authPath)) {
+            try {
+                fs.rmSync(authPath, { recursive: true, force: true });
+                logMsg(`✅ Carpeta ${authPath} eliminada satisfactoriamente`);
+            } catch (e) {
+                logMsg(`❌ No se pudo eliminar la carpeta de sesión: ${e.message}`);
+            }
         }
+    } else {
+        logMsg(`ℹ️  Manteniendo carpeta de sesión para intento de auto-recuperación.`);
     }
 
     // 3. Matar procesos de Chrome huérfanos residuo de esta instancia
@@ -300,7 +295,7 @@ async function resetearSesion() {
     await reportarEstadoVPS('desconectado', null);
 
     // 5. Re-inicializar 
-    logMsg('⏳ Re-inicializando en 5 segundos...');
+    logMsg(`⏳ Re-inicializando en 5 segundos...`);
     setTimeout(iniciarWhatsApp, 5_000);
 }
 

@@ -137,7 +137,8 @@ async function iniciarWhatsApp() {
             if (clienteWA.pupPage) {
                 clienteWA.pupPage.on('error', err => {
                     logMsg(`🔴 [CRITICAL P-ERROR] La página de Chrome hizo crash: ${err.message}`);
-                    resetearSesion().catch(e => logMsg(`Error al intentar auto-recuperar: ${e.message}`));
+                    // Auto-recuperación NO destructiva (borrarSesion = false)
+                    resetearSesion(false).catch(e => logMsg(`Error al intentar auto-recuperar: ${e.message}`));
                 });
                 clienteWA.pupPage.on('pageerror', pageErr => {
                     logMsg(`⚠️ [PAGE-ERROR] Error JS dentro de WhatsApp Web: ${pageErr.message}`);
@@ -252,12 +253,12 @@ function obtenerQR() { return qrBase64; }
 function obtenerCliente() { return clienteWA; }
 
 /**
- * Reinicia completamente la sesión WhatsApp (para cambio de número)
- * Destruye el cliente actual, borra .wwebjs_auth y re-inicializa (genera nuevo QR)
+ * Reinicia completamente la sesión WhatsApp (para cambio de número o recuperación de errores)
+ * @param {boolean} borrarSesion - Si es true, borra la carpeta .wwebjs_auth (nuke). Si es false, solo reinicia el navegador.
  */
-async function resetearSesion() {
+async function resetearSesion(borrarSesion = false) {
     sessionIntentId++; // Invalidar cualquier inicialización en cola
-    logMsg(`🔄 [ID:${sessionIntentId}] Iniciando reset de sesión WhatsApp...`);
+    logMsg(`🔄 [ID:${sessionIntentId}] Iniciando reset de sesión WhatsApp (borrarCarpeta: ${borrarSesion})...`);
 
     // 1. Destruir cliente actual (sin esperar demasiado)
     if (clienteWA) {
@@ -273,20 +274,24 @@ async function resetearSesion() {
         clienteWA = null;
     }
 
-    // 2. Borrar la carpeta de sesión local de forma radical
+    // 2. Borrar la carpeta de sesión local SOLO si se solicita explícitamente
     const fs = require('fs');
     const path = require('path');
     const { WSP_INSTANCIA } = require('../config/api');
     const authPath = path.resolve(`.wwebjs_auth_${WSP_INSTANCIA}`);
 
-    logMsg(`🗑️  Limpiando carpeta de sesión: ${authPath}`);
-    if (fs.existsSync(authPath)) {
-        try {
-            fs.rmSync(authPath, { recursive: true, force: true });
-            logMsg(`✅ Carpeta ${authPath} eliminada satisfactoriamente`);
-        } catch (e) {
-            logMsg(`❌ No se pudo eliminar la carpeta de sesión: ${e.message}`);
+    if (borrarSesion) {
+        logMsg(`🗑️  Limpiando carpeta de sesión: ${authPath} (NUKE)`);
+        if (fs.existsSync(authPath)) {
+            try {
+                fs.rmSync(authPath, { recursive: true, force: true });
+                logMsg(`✅ Carpeta ${authPath} eliminada satisfactoriamente`);
+            } catch (e) {
+                logMsg(`❌ No se pudo eliminar la carpeta de sesión: ${e.message}`);
+            }
         }
+    } else {
+        logMsg(`ℹ️  Manteniendo carpeta de sesión para intento de auto-recuperación.`);
     }
 
     // 3. Matar procesos de Chrome huérfanos residuo de esta instancia
@@ -304,7 +309,7 @@ async function resetearSesion() {
     await reportarEstadoVPS('desconectado', null);
 
     // 5. Re-inicializar 
-    logMsg('⏳ Re-inicializando en 5 segundos...');
+    logMsg(`⏳ Re-inicializando en 5 segundos...`);
     setTimeout(iniciarWhatsApp, 5_000);
 }
 
