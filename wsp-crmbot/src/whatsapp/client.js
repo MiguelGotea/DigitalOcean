@@ -149,9 +149,8 @@ async function iniciarWhatsApp() {
     clienteWA.on('auth_failure', async (msg) => {
         if (currentInitId !== sessionIntentId) return;
         logMsg(`❌ [ID:${currentInitId}] Fallo de autenticación: ${msg}`);
-        estadoActual = 'desconectado';
-        estaIniciando = false;
-        await reportarEstadoVPS('desconectado', null);
+        // FALLO CRÍTICO: Borrar carpeta para permitir nuevo QR
+        resetearSesion(true).catch(e => logMsg(`Error en reset tras auth_failure: ${e.message}`));
     });
 
     clienteWA.on('change_state', state => {
@@ -161,11 +160,12 @@ async function iniciarWhatsApp() {
 
     clienteWA.on('disconnected', async (reason) => {
         logMsg(`⚠️  WhatsApp desconectado: ${reason}`);
-        estadoActual = 'desconectado';
-        estaIniciando = false;
-        qrBase64 = null;
-        await reportarEstadoVPS('desconectado', null);
-        setTimeout(iniciarWhatsApp, 15_000);
+        
+        // Si fue un logout manual desde el teléfono, hay que borrar sesión
+        const borrarCarpeta = (reason === 'LOGOUT');
+        
+        // Usamos resetearSesion para asegurar limpieza de procesos Chrome
+        resetearSesion(borrarCarpeta).catch(e => logMsg(`Error en reset tras desconexión: ${e.message}`));
     });
 
     const initTimeout = setTimeout(() => {
