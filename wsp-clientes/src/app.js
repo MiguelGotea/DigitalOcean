@@ -2,7 +2,7 @@
 
 require('dotenv').config();
 const express = require('express');
-const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion } = require('./whatsapp/client');
+const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion, setReadyHook } = require('./whatsapp/client');
 const { iniciarWorker } = require('./workers/campaign_worker');
 const { iniciarKeepalive } = require('./workers/keepalive_worker');
 const { WSP_INSTANCIA } = require('./config/api');
@@ -130,7 +130,13 @@ async function arrancar() {
     logApp('⏳ Esperando 15s antes de arrancar WhatsApp para estabilizar sistema...');
     await new Promise(r => setTimeout(r, 15_000));
 
-    // 2. Iniciar WhatsApp en background
+    // 2. Vincular workers que dependen de eventos (hook preparado para el futuro)
+    setReadyHook((cliente) => {
+        // En esta instancia los workers actuales no dependen de eventos
+        // pero registramos el hook por consistencia arquitectónica.
+    });
+
+    // 3. Iniciar WhatsApp en background
     iniciarWhatsApp()
         .then((clienteWA) => {
             if (!clienteWA) return;

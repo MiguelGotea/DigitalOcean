@@ -2,7 +2,7 @@
 
 require('dotenv').config();
 const express = require('express');
-const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion } = require('./whatsapp/client');
+const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion, setReadyHook } = require('./whatsapp/client');
 const { iniciarCRMBot } = require('./workers/crm_bot_worker');
 const { iniciarKeepalive } = require('./workers/keepalive_worker');
 const { WSP_INSTANCIA } = require('./config/api');
@@ -131,11 +131,15 @@ async function arrancar() {
     logApp('⏳ Esperando 15s antes de arrancar WhatsApp para estabilizar sistema...');
     await new Promise(r => setTimeout(r, 15_000));
 
-    // 2. Iniciar WhatsApp en background
+    // 2. Vincular workers que dependen de eventos (on message, etc)
+    setReadyHook((cliente) => {
+        iniciarCRMBot(cliente);
+    });
+
+    // 3. Iniciar WhatsApp en background
     iniciarWhatsApp()
         .then((clienteWA) => {
             if (!clienteWA) return;
-            iniciarCRMBot(clienteWA);
             iniciarKeepalive(clienteWA);
             logApp('📣 Bot CRM activo');
             logApp('🔄 Keepalive activo');

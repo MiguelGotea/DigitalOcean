@@ -9,6 +9,7 @@ let estaIniciando = false;
 let qrBase64 = null;
 let clienteWA = null;
 let sessionIntentId = 0; // Para cancelar inits obsoletos durante el delay de stagger
+let readyHook = null; // Callback para re-vincular workers tras reset
 
 const logMsg = (msg) => {
     const pid = process.pid;
@@ -136,6 +137,12 @@ async function iniciarWhatsApp() {
             }
         } catch (e) {
             logMsg(`⚠️ No se pudo inyectar el monitoreo de página: ${e.message}`);
+        }
+
+        // --- RE-VINCULACIÓN DE WORKERS ---
+        if (readyHook) {
+            logMsg(`🔗 Ejecutando ReadyHook para vincular workers...`);
+            readyHook(clienteWA);
         }
     });
 
@@ -299,4 +306,8 @@ async function resetearSesion(borrarSesion = false) {
     setTimeout(iniciarWhatsApp, 5_000);
 }
 
-module.exports = { iniciarWhatsApp, obtenerEstado, obtenerQR, obtenerCliente, reportarEstadoVPS, obtenerEstadoActual, resetearSesion };
+function setReadyHook(hook) {
+    readyHook = hook;
+}
+
+module.exports = { iniciarWhatsApp, obtenerEstado, obtenerQR, obtenerCliente, reportarEstadoVPS, obtenerEstadoActual, resetearSesion, setReadyHook };
