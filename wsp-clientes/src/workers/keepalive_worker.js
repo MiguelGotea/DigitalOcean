@@ -6,7 +6,13 @@
  * Envía un mensaje corto cada 15 minutos a un destino configurado.
  */
 
-const iniciarKeepalive = (cliente) => {
+const { obtenerCliente } = require('../whatsapp/client');
+
+/**
+ * Worker de Keepalive por Mensaje Real
+ * @param {object} _cliente - (Obsoleto) Ya no se usa, el worker obtiene el cliente dinámicamente.
+ */
+const iniciarKeepalive = (_cliente) => {
     const KEEPALIVE_DESTINO = process.env.KEEPALIVE_DESTINO;
     const INSTANCIA = process.env.WSP_INSTANCIA || 'WSP';
 
@@ -20,6 +26,12 @@ const iniciarKeepalive = (cliente) => {
 
     const enviarKeepalive = async () => {
         try {
+            const cliente = obtenerCliente();
+            if (!cliente) {
+                // console.log(`[${INSTANCIA}] ⏳ Keepalive saltado (Cliente no inicializado)`);
+                return;
+            }
+
             // Verificar estado antes de intentar enviar
             const state = await cliente.getState();
             if (state === 'CONNECTED') {

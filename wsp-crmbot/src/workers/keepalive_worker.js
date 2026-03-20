@@ -1,12 +1,15 @@
 'use strict';
 
+const { obtenerCliente } = require('../whatsapp/client');
+
 /**
  * Worker de Keepalive por Mensaje Real
  * Propósito: Evitar que la sesión de WhatsApp Web entre en modo zombie por inactividad.
  * Envía un mensaje corto cada 15 minutos a un destino configurado.
+ * @param {object} _cliente - (Obsoleto) Ya no se usa, el worker obtiene el cliente dinámicamente.
  */
 
-const iniciarKeepalive = (cliente) => {
+const iniciarKeepalive = (_cliente) => {
     const KEEPALIVE_DESTINO = process.env.KEEPALIVE_DESTINO;
     const INSTANCIA = process.env.WSP_INSTANCIA || 'WSP';
 
@@ -20,6 +23,12 @@ const iniciarKeepalive = (cliente) => {
 
     const enviarKeepalive = async () => {
         try {
+            const cliente = obtenerCliente();
+            if (!cliente) {
+                // console.log(`[${INSTANCIA}] ⏳ Keepalive saltado (Cliente no inicializado)`);
+                return;
+            }
+
             // Verificar estado antes de intentar enviar
             const state = await cliente.getState();
             if (state === 'CONNECTED') {
