@@ -55,13 +55,13 @@ const iniciarKeepalive = (_cliente) => {
     };
 
     // 1. Esperar 5 minutos tras arrancar para que la sesión se estabilice
-    console.log(`[${INSTANCIA}] 🕒 Keepalive programado: inicio en 5m, frecuencia cada 15m`);
+    console.log(`[${INSTANCIA}] 🕒 Keepalive programado: inicio en 5m, frecuencia cada 2h`);
     
     setTimeout(() => {
         enviarKeepalive();
         
-        // 2. Ejecutar cada 15 minutos
-        setInterval(enviarKeepalive, 15 * 60 * 1000);
+        // 2. Ejecutar cada 2 horas (120 min)
+        setInterval(enviarKeepalive, 120 * 60 * 1000);
     }, 5 * 60 * 1000);
 };
 
