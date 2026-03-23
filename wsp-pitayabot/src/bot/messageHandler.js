@@ -24,17 +24,30 @@ const {
     formatearCancelado, formatearNoEntendido
 } = require('./formatters');
 const { enviarMensaje, enviarConfirmacion }  = require('../whatsapp/sender');
-const tareasHandler = require('./handlers/tareasHandler');
-const { prepararConfirmacion } = tareasHandler;
+const tareasHandler    = require('./handlers/tareasHandler');
+const reunionesHandler = require('./handlers/reunionesHandler');
+
+// prepararConfirmacion unificado: tareas + reuniones
+async function prepararConfirmacion(intent, entidades, operario) {
+    if (INTENTS_TAREAS.has(intent))    return tareasHandler.prepararConfirmacion(intent, entidades, operario);
+    if (INTENTS_REUNIONES.has(intent)) return reunionesHandler.prepararConfirmacion(intent, entidades, operario);
+    return null;
+}
 
 const MODULO             = 'MSG_HANDLER';
 const CONFIANZA_MINIMA   = 0.7;
 
-// Intents que pertenecen al módulo de tareas
+// Intents que pertenecen al modulo de tareas
 const INTENTS_TAREAS = new Set([
     'crear_tarea', 'buscar_tarea', 'modificar_tarea_fecha',
     'finalizar_tarea', 'cancelar_tarea',
     'buscar_tareas_retrasadas', 'resumen_tareas_semana'
+]);
+
+// Intents que pertenecen al modulo de reuniones
+const INTENTS_REUNIONES = new Set([
+    'crear_reunion', 'buscar_reunion', 'modificar_reunion_fecha',
+    'cancelar_reunion', 'resumen_reuniones_semana', 'horarios_libres'
 ]);
 
 // ─────────────────────────────────────────────
@@ -69,7 +82,11 @@ async function despacharIntent(intent, entidades, operario, subflowCtx = null) {
     if (INTENTS_TAREAS.has(intent)) {
         return tareasHandler.ejecutar(intent, entidades, operario, subflowCtx);
     }
-    return { respuesta: `📝 La función *${intent}* estará disponible próximamente.`, subflow: null };
+    if (INTENTS_REUNIONES.has(intent)) {
+        return reunionesHandler.ejecutar(intent, entidades, operario, subflowCtx);
+    }
+    return { respuesta: `📝 La funcion *${intent}* estara disponible proximamente.`, subflow: null };
+
 }
 
 // ─────────────────────────────────────────────
