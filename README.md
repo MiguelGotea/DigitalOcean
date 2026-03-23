@@ -11,11 +11,13 @@ Arquitectura **multi-instancia**: cada número WhatsApp corre como proceso PM2 i
 ERP (erp.batidospitaya.com / Hostinger)
        ↓ escribe datos en BD MySQL
 api.batidospitaya.com/api/wsp/   ← puente central (PHP)
+api.batidospitaya.com/api/bot/   ← endpoints del PitayaBot (PHP)
        ↑ polling cada 60s
 VPS DigitalOcean — múltiples instancias Node.js + whatsapp-web.js
    ├── wsp-clientes  :3001  → Campañas de marketing a clientesclub
    ├── wsp-crmbot    :3003  → Bot CRM automatizado
-   └── wsp-planilla  :3005  → Notificaciones de planilla a colaboradores
+   ├── wsp-planilla  :3005  → Notificaciones de planilla a colaboradores
+   └── wsp-pitayabot :3007  → Asistente virtual IA para colaboradores
        ↓ envía mensajes
 WhatsApp Web
 ```
@@ -89,9 +91,10 @@ wsp-planilla/                           # PM2 :3005 — Notif. planilla (AUTÓNO
 
 | Nombre PM2 | Puerto | Uso | Estado |
 |-----------|--------|-----|--------|
-| `wsp-clientes` | 3001 | Campañas de marketing a `clientesclub` | ✅ Activo |
-| `wsp-crmbot`   | 3003 | Bot CRM automatizado con NLP | ✅ Activo |
-| `wsp-planilla` | 3005 | Notificaciones de planilla a `Operarios` | ✅ Activo |
+| `wsp-clientes`  | 3001 | Campañas de marketing a `clientesclub` | ✅ Activo |
+| `wsp-crmbot`    | 3003 | Bot CRM automatizado con NLP | ✅ Activo |
+| `wsp-planilla`  | 3005 | Notificaciones de planilla a `Operarios` | ✅ Activo |
+| `wsp-pitayabot` | 3007 | Asistente virtual IA para colaboradores | ✅ Activo |
 
 ---
 

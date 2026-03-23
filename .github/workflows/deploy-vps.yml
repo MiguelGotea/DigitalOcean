@@ -88,14 +88,33 @@ jobs:
           ./wsp-planilla/ \
           ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/var/www/wsp-planilla/
 
+    # ── Instancia 4: PitayaBot — Asistente virtual ───────────
+    - name: 📤 Deploy wsp-pitayabot → /var/www/wsp-pitayabot/
+      run: |
+        rsync -avz \
+          --exclude='.git/' \
+          --exclude='.github/' \
+          --exclude='.scripts/' \
+          --exclude='.agent/' \
+          --exclude='.gemini/' \
+          --exclude='.gitignore' \
+          --exclude='node_modules/' \
+          --exclude='logs/' \
+          --exclude='.env' \
+          --exclude='.wwebjs_auth*' \
+          -e "ssh -o StrictHostKeyChecking=no" \
+          ./wsp-pitayabot/ \
+          ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/var/www/wsp-pitayabot/
+
     # ── Reinicio PM2 (solo instancias activas) ───────────────
     - name: 🔁 Reiniciar instancias PM2
       run: |
         ssh -o StrictHostKeyChecking=no ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} << 'EOF'
           # Reiniciar solo si el proceso está registrado en PM2
-          pm2 restart wsp-clientes  --update-env || true
-          pm2 restart wsp-crmbot    --update-env || true
-          pm2 restart wsp-planilla  --update-env || true
+          pm2 restart wsp-clientes   --update-env || true
+          pm2 restart wsp-crmbot     --update-env || true
+          pm2 restart wsp-planilla   --update-env || true
+          pm2 restart wsp-pitayabot  --update-env || true
           pm2 save
           echo "---"
           pm2 list
@@ -104,7 +123,8 @@ jobs:
     - name: ✅ Deploy completado
       run: |
         echo "✅ Deploy completado"
-        echo "📁 wsp-clientes  → /var/www/wsp-clientes/"
-        echo "📁 wsp-crmbot    → /var/www/wsp-crmbot/"
-        echo "📁 wsp-planilla  → /var/www/wsp-planilla/"
+        echo "📁 wsp-clientes   → /var/www/wsp-clientes/"
+        echo "📁 wsp-crmbot     → /var/www/wsp-crmbot/"
+        echo "📁 wsp-planilla   → /var/www/wsp-planilla/"
+        echo "📁 wsp-pitayabot  → /var/www/wsp-pitayabot/"
         echo "🌐 VPS: ${{ secrets.DO_HOST }}"

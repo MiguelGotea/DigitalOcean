@@ -1,0 +1,187 @@
+'use strict';
+
+require('dotenv').config();
+const express = require('express');
+const {
+    iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS,
+    obtenerEstadoActual, obtenerCliente, resetearSesion, setReadyHook
+} = require('./whatsapp/client');
+const { iniciarPitayaBot } = require('./workers/pitayabot_worker');
+const { iniciarKeepalive  } = require('./workers/keepalive_worker');
+const { WSP_INSTANCIA }     = require('./config/api');
+
+const logApp = (msg) => {
+    const pid = process.pid;
+    const ut  = Math.round(process.uptime());
+    console.log(`[APP|PID:${pid}|UT:${ut}s] ${msg}`);
+};
+
+// ── Manejo de errores globales ──
+process.on('uncaughtException', (err) => {
+    logApp(`💥 FATAL UNCAUGHT EXCEPTION: ${err.message}`);
+    console.error(err.stack);
+    process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+    logApp(`💥 UNHANDLED REJECTION: ${reason}`);
+});
+
+const app  = express();
+const PORT = process.env.PORT || 3007;
+
+app.use(express.json());
+
+// ── Seguridad: token requerido para rutas sensibles ──
+const WSP_TOKEN = process.env.WSP_TOKEN || '';
+function validarToken(req, res, next) {
+    const token = req.headers['x-wsp-token'] || req.query.token;
+    if (WSP_TOKEN && token !== WSP_TOKEN) {
+        return res.status(403).json({ error: 'Token inválido' });
+    }
+    next();
+}
+
+// ── Rutas internas ──
+app.get('/health', (req, res) => {
+    res.json({
+        status:   'ok',
+        servicio: `pitaya-whatsapp-service (${WSP_INSTANCIA})`,
+        hora:     new Date().toISOString()
+    });
+});
+
+app.get('/status', (req, res) => {
+    res.json(obtenerEstado());
+});
+
+app.get('/qr', (req, res) => {
+    const qr = obtenerQR();
+    if (!qr) return res.json({ qr: null, mensaje: 'Sin QR disponible o ya conectado' });
+    res.json({ qr });
+});
+
+// ── Envío manual ──
+app.post('/send', validarToken, async (req, res) => {
+    const numero = req.body.to || req.body.numero;
+    const texto  = req.body.message || req.body.texto;
+    if (!numero || !texto) return res.status(400).json({ error: 'numero y texto son requeridos' });
+    try {
+        const cliente = obtenerCliente();
+        if (!cliente) return res.status(503).json({ success: false, error: 'WhatsApp no conectado' });
+        const chatId = numero.includes('@c.us') ? numero : `${numero}@c.us`;
+        await cliente.sendMessage(chatId, texto);
+        res.json({ success: true, numero, chatId });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── Ping de prueba ──
+app.post('/ping', validarToken, async (req, res) => {
+    const numero = req.body.to || req.body.numero;
+    const texto  = req.body.message || req.body.texto;
+    const agente = req.body.agente || 'Usuario del ERP';
+    if (!numero || !texto) return res.status(400).json({ error: 'numero y texto son requeridos' });
+    try {
+        const cliente = obtenerCliente();
+        if (!cliente) return res.status(503).json({ success: false, error: 'WhatsApp no conectado' });
+        const chatId = numero.includes('@c.us') ? numero : `${numero}@c.us`;
+        await cliente.sendMessage(chatId, texto);
+        const DESTINO = process.env.KEEPALIVE_DESTINO;
+        if (DESTINO) {
+            const grupoId = DESTINO.includes('@') ? DESTINO : `${DESTINO}@c.us`;
+            await cliente.sendMessage(grupoId, `⚡ *Prueba de Ping*\nDe: ${agente}\nAl: ${numero}\nMsg: ${texto}`).catch(() => {});
+        }
+        res.json({ success: true, numero, chatId });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── Reset de sesión ──
+app.post('/reset', validarToken, async (req, res) => {
+    try {
+        await resetearSesion(true);
+        res.json({ success: true, mensaje: 'Sesión reiniciada, generando QR...' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── Arranque: Express PRIMERO, luego WhatsApp en background ──
+async function arrancar() {
+    logApp(`🚀 Iniciando Pitaya WhatsApp Service [${WSP_INSTANCIA}]...`);
+
+    // 1. Levantar Express inmediatamente
+    await new Promise((resolve) => {
+        app.listen(PORT, '0.0.0.0', () => {
+            logApp(`✅ API interna [${WSP_INSTANCIA}] escuchando en http://0.0.0.0:${PORT}`);
+            resolve();
+        });
+    });
+
+    logApp('⏳ Esperando 15s antes de arrancar WhatsApp...');
+    await new Promise(r => setTimeout(r, 15_000));
+
+    // 2. Vincular worker antes de iniciar WhatsApp
+    setReadyHook((cliente) => {
+        iniciarPitayaBot(cliente);
+    });
+
+    // 3. Iniciar WhatsApp en background
+    iniciarWhatsApp()
+        .then((clienteWA) => {
+            if (!clienteWA) return;
+            iniciarKeepalive(clienteWA);
+            logApp('📣 PitayaBot activo');
+            logApp('🔄 Keepalive activo');
+        })
+        .catch(err => {
+            logApp(`❌ Error fatal en flujo de WhatsApp: ${err.message}`);
+        });
+
+    // 4. Heartbeat: actualiza ultimo_ping cada 60s + anti-zombie
+    setInterval(async () => {
+        try {
+            const estado = obtenerEstadoActual();
+            let realWaState = 'N/A';
+
+            if (estado === 'conectado') {
+                const cliente = obtenerCliente();
+                if (cliente) {
+                    try {
+                        realWaState = await Promise.race([
+                            cliente.getState(),
+                            new Promise((_, reject) =>
+                                setTimeout(() => reject(new Error('TIMEOUT_GET_STATE')), 10000))
+                        ]);
+
+                        // Forzar presencia "En línea" anti-zombie
+                        try { await cliente.sendPresenceAvailable(); } catch {}
+
+                    } catch (e) {
+                        realWaState = `ERROR: ${e.message}`;
+                        logApp(`🚨 WhatsApp congelado → ${e.message}. Forzando recuperación...`);
+                        await resetearSesion(false);
+                        return;
+                    }
+                }
+            }
+
+            const data = await reportarEstadoVPS(estado, null);
+            logApp(`💓 Heartbeat [${WSP_INSTANCIA}] — ${estado} | engine: ${realWaState}`);
+
+            if (data && data.reset_solicitado) {
+                logApp('🔄 Reset solicitado desde ERP — ejecutando...');
+                await resetearSesion(true);
+            }
+        } catch (e) {
+            logApp(`⚠️  Heartbeat falló: ${e.message}`);
+        }
+    }, 60_000);
+}
+
+arrancar().catch(err => {
+    console.error('❌ Error arrancando el servicio:', err);
+    process.exit(1);
+});
