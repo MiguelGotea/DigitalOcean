@@ -9,7 +9,7 @@
  *  3. Si no hay estado pendiente → clasificar con IA
  *  4. confianza >= 0.7 y no ambiguo → guardar estado + pedir confirmación
  *  5. confianza < 0.7 o ambiguo → pedir reformulación
- *  6. Tras confirmación "sí" → ejecutar acción (registrar log) → borrar estado
+ *  6. Tras confirmación "sí" → ejecutar acción real → borrar estado
  *  7. Tras confirmación "no" → borrar estado → responder cancelado
  */
 
@@ -23,19 +23,27 @@ const {
 } = require('./confirmManager');
 const {
     formatearConfirmacion, formatearNoRegistrado, formatearError,
-    formatearCancelado, formatearAccionEjecutada, formatearNoEntendido
+    formatearCancelado, formatearNoEntendido
 } = require('./formatters');
 const { enviarMensaje } = require('../whatsapp/sender');
+
+// Handlers por dominio
+const tareasHandler = require('./handlers/tareasHandler');
 
 const MODULO = 'MSG_HANDLER';
 
 // ── Umbral de confianza para confirmar sin preguntar ──
 const CONFIANZA_MINIMA = 0.7;
 
+// Intents que pertenecen al módulo de tareas
+const INTENTS_TAREAS = new Set([
+    'crear_tarea', 'buscar_tarea', 'modificar_tarea_fecha',
+    'finalizar_tarea', 'cancelar_tarea',
+    'buscar_tareas_retrasadas', 'resumen_tareas_semana'
+]);
+
 /**
  * Identifica al operario por su número de celular normalizado.
- * @param {string} celular  Número local (ej: 88112233)
- * @returns {object|null}   Datos del operario o null
  */
 async function identificarOperario(celular, lid = null) {
     try {
@@ -82,20 +90,33 @@ async function registrarLog({ codOperario, celular, intent, mensajeEntrada, resp
 }
 
 /**
+ * Despacha un intent a su handler correspondiente y devuelve la respuesta.
+ * @returns {{ respuesta: string, subflow: object|null }}
+ */
+async function despacharIntent(intent, entidades, operario, estadoPendiente = null) {
+    if (INTENTS_TAREAS.has(intent)) {
+        return await tareasHandler.ejecutar(intent, entidades, operario, estadoPendiente);
+    }
+
+    // Para módulos no implementados aún
+    return {
+        respuesta: `📝 La función *${intent}* estará disponible muy pronto.`,
+        subflow: null
+    };
+}
+
+/**
  * Procesa un mensaje entrante de WhatsApp.
- * @param {object} cliente  Cliente whatsapp-web.js
- * @param {object} msg      Mensaje de whatsapp-web.js
  */
 async function procesarMensaje(cliente, msg) {
     const inicio = Date.now();
 
-    // Solo procesar mensajes de texto entrantes, no de grupos
     if (esGrupo(msg.from))  return;
     if (msg.fromMe)          return;
     if (msg.type !== 'chat') return;
 
-    const jid         = msg.from;
-    let celular       = normalizarNumero(jid);
+    const jid   = msg.from;
+    let celular  = normalizarNumero(jid);
 
     // ── 0. Resolver LID a Número si es necesario ──
     if (jid.includes('@lid')) {
@@ -110,7 +131,7 @@ async function procesarMensaje(cliente, msg) {
         }
     }
 
-    const textoRaw    = (msg.body || '').trim();
+    const textoRaw = (msg.body || '').trim();
     if (!textoRaw) return;
 
     log(MODULO, `📨 Mensaje de ${celular} (${jid}): "${textoRaw.slice(0, 80)}"`);
@@ -137,33 +158,83 @@ async function procesarMensaje(cliente, msg) {
         const estadoPendiente = await obtenerEstado(celular);
 
         if (estadoPendiente) {
-            const decision = evaluarRespuesta(textoRaw);
-            log(MODULO, `🔄 Estado pendiente encontrado para ${celular}: decision=${decision}`);
-
-            if (decision === 'confirmar') {
-                // Ejecutar acción (Etapa 1: solo registrar, Etapas 2+ implementarán la lógica real)
-                intentFinal    = estadoPendiente.intent;
-                respuestaFinal = formatearAccionEjecutada(estadoPendiente.intent);
-                await borrarEstado(celular);
-                log(MODULO, `✅ Acción confirmada y ejecutada: ${intentFinal}`);
-
-            } else if (decision === 'cancelar') {
-                intentFinal    = `cancelado_${estadoPendiente.intent}`;
-                respuestaFinal = formatearCancelado();
-                await borrarEstado(celular);
-                log(MODULO, `🚫 Acción cancelada por el usuario`);
+            // ── 2a. Subflow: usuario eligiendo de una lista numerada ──
+            if (estadoPendiente.subflow === 'seleccion_lista') {
+                const num = parseInt(textoRaw.trim(), 10);
+                if (!isNaN(num)) {
+                    log(MODULO, `🔢 Usuario seleccionó opción #${num} en subflow`);
+                    intentFinal = estadoPendiente.payload?.intentOriginal || 'seleccion_lista';
+                    const { respuesta } = await despacharIntent(
+                        intentFinal,
+                        estadoPendiente.payload?.entidades || {},
+                        operario,
+                        { subflow: 'seleccion_lista', payload: estadoPendiente.payload, seleccionNumero: num }
+                    );
+                    respuestaFinal = respuesta;
+                    await borrarEstado(celular);
+                } else {
+                    // No es número → tratar como nuevo mensaje
+                    await borrarEstado(celular);
+                    return await clasificarYConfirmar(cliente, jid, celular, codOperario, operario, textoRaw, inicio);
+                }
 
             } else {
-                // El usuario envió algo nuevo — tratar como nuevo mensaje (borrar estado anterior)
-                await borrarEstado(celular);
-                log(MODULO, `🔁 Nuevo mensaje detectado (ignorando estado previo) — reclasificando...`);
-                // Continuar al paso 3 (sin return)
-                return await clasificarYConfirmar(cliente, jid, celular, codOperario, textoRaw, inicio);
+                // ── 2b. Flujo normal de confirmación Sí/No ──
+                const decision = evaluarRespuesta(textoRaw);
+                log(MODULO, `🔄 Estado pendiente para ${celular}: decision=${decision}`);
+
+                if (decision === 'confirmar') {
+                    intentFinal = estadoPendiente.intent;
+                    const { respuesta, subflow } = await despacharIntent(
+                        intentFinal,
+                        estadoPendiente.payload,
+                        operario,
+                        null
+                    );
+                    respuestaFinal = respuesta;
+                    await borrarEstado(celular);
+
+                    // Si el handler devuelve un subflow (ej: lista de selección), guardarlo
+                    if (subflow) {
+                        await guardarEstado(
+                            codOperario, celular,
+                            subflow.type,
+                            { ...subflow.payload, intentOriginal: intentFinal, entidades: estadoPendiente.payload },
+                            'Responde con el número de la tarea.'
+                        );
+                        log(MODULO, `🔁 Subflow guardado: ${subflow.type}`);
+                        // Sobreescribir el estado con tipo subflow para distinguirlo
+                        await axios.post(
+                            `${API_BASE_URL}/api/bot/confirmacion/guardar.php`,
+                            {
+                                cod_operario: codOperario,
+                                celular,
+                                intent: subflow.type,
+                                payload: { ...subflow.payload, intentOriginal: intentFinal, entidades: estadoPendiente.payload },
+                                frase: 'Selección de tarea pendiente',
+                                subflow: 'seleccion_lista'
+                            },
+                            { headers: { 'X-WSP-Token': WSP_TOKEN }, timeout: 8_000 }
+                        );
+                    }
+
+                    log(MODULO, `✅ Acción ejecutada: ${intentFinal}`);
+
+                } else if (decision === 'cancelar') {
+                    intentFinal    = `cancelado_${estadoPendiente.intent}`;
+                    respuestaFinal = formatearCancelado();
+                    await borrarEstado(celular);
+                    log(MODULO, `🚫 Acción cancelada por el usuario`);
+
+                } else {
+                    await borrarEstado(celular);
+                    return await clasificarYConfirmar(cliente, jid, celular, codOperario, operario, textoRaw, inicio);
+                }
             }
 
         } else {
             // ── 3. Clasificar con IA ──
-            return await clasificarYConfirmar(cliente, jid, celular, codOperario, textoRaw, inicio);
+            return await clasificarYConfirmar(cliente, jid, celular, codOperario, operario, textoRaw, inicio);
         }
 
     } catch (err) {
@@ -173,18 +244,14 @@ async function procesarMensaje(cliente, msg) {
         errorDetalle   = err.message;
     }
 
-    // Enviar respuesta
     await enviarMensaje(cliente, jid, respuestaFinal, false);
 
-    // Registrar log
     await registrarLog({
-        codOperario,
-        celular,
+        codOperario, celular,
         intent:         intentFinal,
         mensajeEntrada: textoRaw,
         respuestaBot:   respuestaFinal,
-        exitoso,
-        errorDetalle,
+        exitoso, errorDetalle,
         duracionMs:     Date.now() - inicio
     });
 }
@@ -192,7 +259,7 @@ async function procesarMensaje(cliente, msg) {
 /**
  * Sub-función: clasifica con IA y envía confirmación o pide reformulación.
  */
-async function clasificarYConfirmar(cliente, jid, celular, codOperario, texto, inicio) {
+async function clasificarYConfirmar(cliente, jid, celular, codOperario, operario, texto, inicio) {
     let respuestaFinal = '';
     let intentFinal    = 'desconocido';
     let exitoso        = true;
@@ -208,7 +275,6 @@ async function clasificarYConfirmar(cliente, jid, celular, codOperario, texto, i
             !clasificacion.ambiguo &&
             clasificacion.intent !== 'desconocido'
         ) {
-            // Guardar estado y pedir confirmación
             const guardado = await guardarEstado(
                 codOperario,
                 celular,
@@ -219,15 +285,13 @@ async function clasificarYConfirmar(cliente, jid, celular, codOperario, texto, i
 
             if (guardado) {
                 respuestaFinal = formatearConfirmacion(clasificacion.frase_confirmacion);
-                log(MODULO, `💬 Confirmación enviada al usuario para intent: ${intentFinal}`);
+                log(MODULO, `💬 Confirmación enviada para intent: ${intentFinal}`);
             } else {
-                // Error guardando estado — responder error
                 respuestaFinal = formatearError('No se pudo guardar la acción pendiente.');
                 exitoso        = false;
             }
 
         } else {
-            // Confianza baja o ambiguo
             respuestaFinal = formatearNoEntendido();
             log(MODULO, `🤔 Confianza baja o ambiguo — pidiendo reformulación`);
         }
@@ -242,13 +306,11 @@ async function clasificarYConfirmar(cliente, jid, celular, codOperario, texto, i
     await enviarMensaje(cliente, jid, respuestaFinal, false);
 
     await registrarLog({
-        codOperario,
-        celular,
+        codOperario, celular,
         intent:         intentFinal,
         mensajeEntrada: texto,
         respuestaBot:   respuestaFinal,
-        exitoso,
-        errorDetalle,
+        exitoso, errorDetalle,
         duracionMs:     Date.now() - inicio
     });
 }
