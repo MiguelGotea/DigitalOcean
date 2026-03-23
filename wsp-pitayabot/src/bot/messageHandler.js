@@ -95,19 +95,32 @@ async function procesarMensaje(cliente, msg) {
     if (msg.type !== 'chat') return;
 
     const jid         = msg.from;
-    const celular     = normalizarNumero(jid);
-    const textoRaw    = (msg.body || '').trim();
+    let celular       = normalizarNumero(jid);
 
+    // ── 0. Resolver LID a Número si es necesario ──
+    if (jid.includes('@lid')) {
+        try {
+            const contact = await cliente.getContactById(jid);
+            if (contact && contact.number) {
+                log(MODULO, `🔍 Resolviendo LID ${jid} → PN: ${contact.number}`);
+                celular = normalizarNumero(`${contact.number}@c.us`);
+            }
+        } catch (e) {
+            log(MODULO, `⚠️ No se pudo resolver LID ${jid}: ${e.message}`);
+        }
+    }
+
+    const textoRaw    = (msg.body || '').trim();
     if (!textoRaw) return;
 
-    log(MODULO, `📨 Mensaje de ${celular}: "${textoRaw.slice(0, 80)}"`);
+    log(MODULO, `📨 Mensaje de ${celular} (${jid}): "${textoRaw.slice(0, 80)}"`);
 
     // ── 1. Identificar operario ──
     const operario = await identificarOperario(celular);
     if (!operario) {
         const respuesta = formatearNoRegistrado();
         await enviarMensaje(cliente, jid, respuesta, false);
-        log(MODULO, `🚫 Número no registrado: ${celular}`);
+        log(MODULO, `🚫 Número no registrado: ${celular} (jid: ${jid})`);
         return;
     }
 

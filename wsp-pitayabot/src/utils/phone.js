@@ -38,8 +38,11 @@ function formatearJID(numero) {
  * @param {string} jid
  * @returns {boolean}
  */
-function esGrupo(jid) {
-    return jid.includes('@g.us');
+/**
+ * Verifica si es una identidad de tipo LID
+ */
+function esLID(jid) {
+    return jid.includes('@lid');
 }
 
-module.exports = { normalizarNumero, formatearJID, esGrupo };
+module.exports = { normalizarNumero, formatearJID, esGrupo, esLID };
