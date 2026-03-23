@@ -146,6 +146,7 @@ async function ejecutar(intent, entidades, operario, estadoPendiente = null) {
 
             const r = await llamarApi('POST', 'crear.php', {
                 cod_operario: operario.CodOperario,
+                cod_cargo:    operario.CodNivelesCargos || null,
                 titulo:       entidades?.titulo || 'Reunion',
                 descripcion:  entidades?.descripcion || null,
                 fecha:        entidades?.fecha || null,
