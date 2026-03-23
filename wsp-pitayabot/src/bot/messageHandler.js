@@ -37,12 +37,12 @@ const CONFIANZA_MINIMA = 0.7;
  * @param {string} celular  Número local (ej: 88112233)
  * @returns {object|null}   Datos del operario o null
  */
-async function identificarOperario(celular) {
+async function identificarOperario(celular, lid = null) {
     try {
         const resp = await axios.get(
             `${API_BASE_URL}/api/bot/auth/identificar.php`,
             {
-                params:  { celular },
+                params:  { celular, lid },
                 headers: { 'X-WSP-Token': WSP_TOKEN },
                 timeout: 8_000
             }
@@ -116,7 +116,7 @@ async function procesarMensaje(cliente, msg) {
     log(MODULO, `📨 Mensaje de ${celular} (${jid}): "${textoRaw.slice(0, 80)}"`);
 
     // ── 1. Identificar operario ──
-    const operario = await identificarOperario(celular);
+    const operario = await identificarOperario(celular, jid);
     if (!operario) {
         const respuesta = formatearNoRegistrado();
         await enviarMensaje(cliente, jid, respuesta, false);
