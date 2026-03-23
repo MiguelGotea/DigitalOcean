@@ -50,6 +50,11 @@ async function identificarOperario(celular, lid = null) {
         if (resp.data?.success && resp.data?.data) {
             return resp.data.data;
         }
+
+        // Si no tuvo éxito, loguear la razón si existe (para depuración)
+        if (!resp.data?.success) {
+            log(MODULO, `⚠️ Fallo identificación: ${resp.data?.error || resp.data?.message || 'Razón desconocida'}`, resp.data);
+        }
         return null;
     } catch (err) {
         logError(MODULO, 'Error identificando operario', err);
