@@ -33,11 +33,10 @@ function formatearJID(numero) {
     return `${conPrefijo}@c.us`;
 }
 
-/**
- * Verifica si el mensaje viene de un grupo (no procesar)
- * @param {string} jid
- * @returns {boolean}
- */
+function esGrupo(jid) {
+    return jid.includes('@g.us');
+}
+
 /**
  * Verifica si es una identidad de tipo LID
  */
