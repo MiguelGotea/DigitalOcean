@@ -4,7 +4,8 @@
  * phone.js — Normalización de números de teléfono WhatsApp
  *
  * WhatsApp entrega JIDs como: 50588112233@c.us o 50588112233@g.us
- * La tabla Operarios guarda solo el número local: 88112233 (país Nicaragua +505)
+ * La tabla Operarios guarda el número en el campo telefono_corporativo: 88112233 (país Nicaragua +505)
+ * El bot SOLO atiende números corporativos (telefono_corporativo), no celulares personales.
  */
 
 /**
