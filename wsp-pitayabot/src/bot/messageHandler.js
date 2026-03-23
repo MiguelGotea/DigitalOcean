@@ -23,7 +23,7 @@ const {
     formatearConfirmacion, formatearNoRegistrado, formatearError,
     formatearCancelado, formatearNoEntendido
 } = require('./formatters');
-const { enviarMensaje }  = require('../whatsapp/sender');
+const { enviarMensaje, enviarConfirmacion }  = require('../whatsapp/sender');
 const tareasHandler      = require('./handlers/tareasHandler');
 
 const MODULO             = 'MSG_HANDLER';
@@ -219,10 +219,13 @@ async function clasificarYConfirmar(cliente, jid, celular, codOperario, operario
 
         if (clas.confianza >= CONFIANZA_MINIMA && !clas.ambiguo && clas.intent !== 'desconocido') {
             const ok = await guardarEstado(codOperario, celular, clas.intent, clas.entidades, clas.frase_confirmacion);
-            respuestaFinal = ok
-                ? formatearConfirmacion(clas.frase_confirmacion)
-                : formatearError('No se pudo guardar la acción pendiente.');
-            if (!ok) exitoso = false;
+            if (ok) {
+                await enviarConfirmacion(cliente, jid, clas.frase_confirmacion);
+                exitoso = true;
+            } else {
+                respuestaFinal = formatearError('No se pudo guardar la acción pendiente.');
+                exitoso = false;
+            }
             log(MODULO, `💬 Confirmación enviada para: ${intentFinal}`);
         } else {
             respuestaFinal = formatearNoEntendido();
@@ -235,7 +238,11 @@ async function clasificarYConfirmar(cliente, jid, celular, codOperario, operario
         errorDetalle   = err.message;
     }
 
-    await enviarMensaje(cliente, jid, respuestaFinal, false);
+
+    // Solo enviar texto si no fue ya manejado por enviarConfirmacion (botones)
+    if (respuestaFinal) {
+        await enviarMensaje(cliente, jid, respuestaFinal, false);
+    }
     await registrarLog({ codOperario, celular, intent: intentFinal, mensajeEntrada: texto, respuestaBot: respuestaFinal, exitoso, errorDetalle, duracionMs: Date.now() - inicio });
 }
 
