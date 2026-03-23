@@ -1,22 +1,26 @@
 'use strict';
 
-/**
- * pitayabot_worker.js — Worker principal de PitayaBot
- *
- * Registra el listener de mensajes entrantes en el cliente WhatsApp
- * y delega el procesamiento a messageHandler.
- */
-
 const { procesarMensaje } = require('../bot/messageHandler');
 const { log, logError }   = require('../utils/logger');
 
 const MODULO = 'BOT_WORKER';
 
-/**
- * Inicia el bot: registra listeners de mensajes en el cliente WA.
- */
 function iniciarPitayaBot(cliente) {
     log(MODULO, '🤖 PitayaBot worker iniciado — escuchando mensajes...');
+
+    cliente.on('message', async (msg) => {
+        try {
+            await procesarMensaje(cliente, msg);
+        } catch (err) {
+            logError(MODULO, 'Error no capturado procesando mensaje', err);
+        }
+    });
+
+    log(MODULO, `✅ Worker registrado. PitayaBot listo para recibir mensajes.`);
+}
+
+module.exports = { iniciarPitayaBot };
+
 
     // ── Mensajes de texto normales ──
     cliente.on('message', async (msg) => {
