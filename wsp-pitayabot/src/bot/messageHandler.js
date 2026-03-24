@@ -26,6 +26,7 @@ const {
 const { enviarMensaje, enviarConfirmacion }  = require('../whatsapp/sender');
 const tareasHandler    = require('./handlers/tareasHandler');
 const reunionesHandler = require('./handlers/reunionesHandler');
+const notasHandler     = require('./handlers/notasHandler');
 
 // prepararConfirmacion unificado: tareas + reuniones
 async function prepararConfirmacion(intent, entidades, operario) {
@@ -48,6 +49,11 @@ const INTENTS_TAREAS = new Set([
 const INTENTS_REUNIONES = new Set([
     'crear_reunion', 'buscar_reunion', 'modificar_reunion_fecha',
     'cancelar_reunion', 'resumen_reuniones_semana', 'horarios_libres'
+]);
+
+// Intents que pertenecen al modulo de notas (Obsidian)
+const INTENTS_NOTAS = new Set([
+    'crear_nota', 'crear_nota_decision', 'crear_nota_dictado', 'buscar_nota'
 ]);
 
 // ─────────────────────────────────────────────
@@ -85,8 +91,10 @@ async function despacharIntent(intent, entidades, operario, subflowCtx = null) {
     if (INTENTS_REUNIONES.has(intent)) {
         return reunionesHandler.ejecutar(intent, entidades, operario, subflowCtx);
     }
+    if (INTENTS_NOTAS.has(intent)) {
+        return notasHandler.ejecutar(intent, entidades, operario);
+    }
     return { respuesta: `📝 La funcion *${intent}* estara disponible proximamente.`, subflow: null };
-
 }
 
 // ─────────────────────────────────────────────
