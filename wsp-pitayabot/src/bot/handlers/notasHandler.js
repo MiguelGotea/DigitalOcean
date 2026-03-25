@@ -12,13 +12,13 @@
  *  3. Construir GitHubClient y ejecutar la acción
  */
 
-const axios      = require('axios');
+const axios = require('axios');
 const { API_BASE_URL, WSP_TOKEN } = require('../../config/api');
-const { log, logError }           = require('../../utils/logger');
-const { descifrar }               = require('../../utils/crypto');
-const GitHubClient                = require('../../utils/githubClient');
+const { log, logError } = require('../../utils/logger');
+const { descifrar } = require('../../utils/crypto');
+const GitHubClient = require('../../utils/githubClient');
 
-const MODULO  = 'NOTAS_HANDLER';
+const MODULO = 'NOTAS_HANDLER';
 const HEADERS = { 'X-WSP-Token': WSP_TOKEN };
 const TIMEOUT = 15_000;
 
@@ -51,7 +51,7 @@ async function obtenerGitHubClient(codOperario) {
     const token = (github_token_enc && github_token_enc.includes(':'))
         ? descifrar(github_token_enc)
         : github_token_enc;
-    const [owner, repo]  = github_repo.split('/');
+    const [owner, repo] = github_repo.split('/');
 
     if (!owner || !repo) {
         throw new Error('Formato de github_repo inválido. Usa el formato owner/repo.');
@@ -74,9 +74,9 @@ async function llamarIA(promptSistema, promptUsuario) {
     if (!apiKey) throw new Error('No hay API key de IA disponible');
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-    const payload   = {
+    const payload = {
         contents: [{
-            role:  'user',
+            role: 'user',
             parts: [{ text: `${promptSistema}\n\nTexto del usuario:\n${promptUsuario}` }]
         }],
         generationConfig: { temperature: 0.3, maxOutputTokens: 1500 }
@@ -173,7 +173,7 @@ async function ejecutar(intent, entidades, operario) {
             if (!contenidoRaw) return { respuesta: `❌ No entendí el contenido de la nota. Indica "Nota: [tu texto]".`, subflow: null };
 
             // Si el contenido es largo o sin estructura, dejar que Gemini extraiga el título
-            let titulo    = entidades?.titulo || null;
+            let titulo = entidades?.titulo || null;
             let contenido = entidades?.contenido || contenidoRaw;
 
             if (!titulo || titulo === contenido) {
@@ -185,7 +185,7 @@ async function ejecutar(intent, entidades, operario) {
             }
 
             const nombreArchivo = `${slugify(titulo)}.md`;
-            const mdContenido   = buildNotaEstandar(titulo, contenido);
+            const mdContenido = buildNotaEstandar(titulo, contenido);
 
             await client.crearNota('', nombreArchivo, mdContenido);
 
@@ -215,15 +215,15 @@ Responde SOLO con JSON: {"titulo":"","contexto":"","decision":"","razon":""}`,
             let campos = { titulo: 'Decisión', contexto: textoRaw, decision: textoRaw, razon: '' };
             try {
                 const inicio = iaResp.indexOf('{');
-                const fin    = iaResp.lastIndexOf('}');
+                const fin = iaResp.lastIndexOf('}');
                 if (inicio !== -1 && fin !== -1) {
                     campos = JSON.parse(iaResp.slice(inicio, fin + 1));
                 }
             } catch (_) { /* usar defaults */ }
 
-            const hoy           = fechaHoy();
+            const hoy = fechaHoy();
             const nombreArchivo = `${hoy}_${slugify(campos.titulo || 'decision')}.md`;
-            const mdContenido   = buildNotaDecision(campos.titulo, campos.contexto, campos.decision, campos.razon);
+            const mdContenido = buildNotaDecision(campos.titulo, campos.contexto, campos.decision, campos.razon);
 
             await client.crearNota('Decisiones', nombreArchivo, mdContenido);
 
@@ -253,7 +253,7 @@ Responde SOLO con el markdown completo, sin explicaciones.`,
 
             // Extraer título del H1 generado por Gemini
             const tituloMatch = iaResp.match(/^#\s+(.+)$/m);
-            const titulo       = tituloMatch ? tituloMatch[1].trim() : 'Dictado';
+            const titulo = tituloMatch ? tituloMatch[1].trim() : 'Dictado';
             const nombreArchivo = `${fechaHoy()}_${slugify(titulo)}.md`;
 
             await client.crearNota('', nombreArchivo, iaResp.trim());
@@ -273,7 +273,7 @@ Responde SOLO con el markdown completo, sin explicaciones.`,
             let archivos = [];
             try {
                 const raw = await client.listarArchivos('');
-                archivos  = raw.filter(f => f.type === 'file' && f.name.endsWith('.md'));
+                archivos = raw.filter(f => f.type === 'file' && f.name.endsWith('.md'));
             } catch (e) {
                 logError(MODULO, 'Error listando archivos GitHub', e);
                 return { respuesta: `⚠️ No pude acceder a tu vault. Verifica que el repositorio es accesible.`, subflow: null };
@@ -303,7 +303,7 @@ Si ninguno es relevante, responde: { "indices": [] }`,
             let indices = [];
             try {
                 const inicio = iaResp.indexOf('{');
-                const fin    = iaResp.lastIndexOf('}');
+                const fin = iaResp.lastIndexOf('}');
                 if (inicio !== -1 && fin !== -1) {
                     const parsed = JSON.parse(iaResp.slice(inicio, fin + 1));
                     indices = parsed.indices || [];
