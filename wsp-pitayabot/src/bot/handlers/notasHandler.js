@@ -73,7 +73,7 @@ async function llamarIA(promptSistema, promptUsuario) {
     const apiKey = keyResp.data?.api_key;
     if (!apiKey) throw new Error('No hay API key de IA disponible');
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
     const payload = {
         contents: [{
             role: 'user',
