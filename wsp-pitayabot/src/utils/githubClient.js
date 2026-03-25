@@ -19,7 +19,7 @@ class GitHubClient {
      * @param {string} [vaultFolder]  Subcarpeta raíz (opcional)
      */
     constructor(token, owner, repo, branch = 'main', vaultFolder = '') {
-        this.token       = token;
+        this.token       = (token || '').trim();
         this.owner       = owner;
         this.repo        = repo;
         this.branch      = branch;
