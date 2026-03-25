@@ -47,7 +47,10 @@ async function obtenerGitHubClient(codOperario) {
         throw new Error('SIN_OBSIDIAN');
     }
 
-    const token          = descifrar(github_token_enc);
+    // Si el token tiene formato "iv:cifrado" -> descifrar; si no -> usar como texto plano
+    const token = (github_token_enc && github_token_enc.includes(':'))
+        ? descifrar(github_token_enc)
+        : github_token_enc;
     const [owner, repo]  = github_repo.split('/');
 
     if (!owner || !repo) {
