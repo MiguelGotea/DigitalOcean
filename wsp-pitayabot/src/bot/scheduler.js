@@ -33,9 +33,10 @@ async function ejecutarCron(nombre, endpoint, clienteWA) {
     try {
         log(MODULO, `⏰ Ejecutando cron: ${nombre}`);
 
-        const resp = await axios.get(`${API_BASE_URL}${endpoint}`, {
+        // Llamamos con ?ejecutar=1 para que la API haga el envío y actualice el TS
+        const resp = await axios.get(`${API_BASE_URL}${endpoint}?ejecutar=1`, {
             headers: HEADERS,
-            timeout: 30_000
+            timeout: 60_000 // Aumentamos timeout para esperar el envío real de la API
         });
 
         if (!resp.data?.success) {
@@ -43,29 +44,13 @@ async function ejecutarCron(nombre, endpoint, clienteWA) {
             return;
         }
 
-        const items = resp.data.data || [];
-        if (items.length === 0) {
+        const count = resp.data.data?.length || 0;
+        if (count === 0) {
             log(MODULO, `ℹ️ ${nombre}: Sin mensajes que enviar (${resp.data?.motivo || 'sin datos'})`);
             return;
         }
 
-        log(MODULO, `📤 ${nombre}: Enviando ${items.length} mensaje(s)`);
-
-        for (const item of items) {
-            try {
-                const jid = item.celular.includes('@')
-                    ? item.celular
-                    : `505${item.celular}@c.us`;
-
-                await clienteWA.sendMessage(jid, item.mensaje);
-                log(MODULO, `✅ Enviado a ${item.celular}`);
-                await delay(2500); // anti-ban
-            } catch (sendErr) {
-                logError(MODULO, `Error enviando a ${item.celular}`, sendErr);
-            }
-        }
-
-        log(MODULO, `✅ Cron ${nombre} completado — ${items.length} enviados`);
+        log(MODULO, `✅ Cron ${nombre} completado — ${count} mensajes procesados por la API`);
 
     } catch (err) {
         logError(MODULO, `Error en cron ${nombre}`, err);
