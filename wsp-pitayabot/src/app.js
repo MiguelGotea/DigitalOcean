@@ -8,6 +8,7 @@ const {
 } = require('./whatsapp/client');
 const { iniciarPitayaBot } = require('./workers/pitayabot_worker');
 const { iniciarKeepalive  } = require('./workers/keepalive_worker');
+const { iniciarScheduler  } = require('./bot/scheduler');
 const { WSP_INSTANCIA }     = require('./config/api');
 
 const logApp = (msg) => {
@@ -126,6 +127,7 @@ async function arrancar() {
     // 2. Vincular worker antes de iniciar WhatsApp
     setReadyHook((cliente) => {
         iniciarPitayaBot(cliente);
+        iniciarScheduler(cliente);
     });
 
     // 3. Iniciar WhatsApp en background
