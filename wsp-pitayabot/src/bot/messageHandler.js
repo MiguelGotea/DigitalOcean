@@ -27,6 +27,7 @@ const { enviarMensaje, enviarConfirmacion }  = require('../whatsapp/sender');
 const tareasHandler    = require('./handlers/tareasHandler');
 const reunionesHandler = require('./handlers/reunionesHandler');
 const notasHandler     = require('./handlers/notasHandler');
+const correosHandler   = require('./handlers/correosHandler');
 
 // prepararConfirmacion unificado: tareas + reuniones
 async function prepararConfirmacion(intent, entidades, operario) {
@@ -54,6 +55,11 @@ const INTENTS_REUNIONES = new Set([
 // Intents que pertenecen al modulo de notas (Obsidian)
 const INTENTS_NOTAS = new Set([
     'crear_nota', 'crear_nota_decision', 'crear_nota_dictado', 'buscar_nota'
+]);
+
+// Intents que pertenecen al modulo de correos
+const INTENTS_CORREOS = new Set([
+    'enviar_correo', 'buscar_correo', 'correos_pendientes'
 ]);
 
 // ─────────────────────────────────────────────
@@ -84,7 +90,7 @@ async function registrarLog(data) {
  * Despacha el intent al handler correspondiente.
  * @returns {{ respuesta: string, subflow: object|null }}
  */
-async function despacharIntent(intent, entidades, operario, subflowCtx = null) {
+async function despacharIntent(intent, entidades, operario, subflowCtx = null, msgOriginal = null) {
     if (INTENTS_TAREAS.has(intent)) {
         return tareasHandler.ejecutar(intent, entidades, operario, subflowCtx);
     }
@@ -93,6 +99,9 @@ async function despacharIntent(intent, entidades, operario, subflowCtx = null) {
     }
     if (INTENTS_NOTAS.has(intent)) {
         return notasHandler.ejecutar(intent, entidades, operario);
+    }
+    if (INTENTS_CORREOS.has(intent)) {
+        return correosHandler.ejecutar(intent, entidades, operario, subflowCtx, msgOriginal);
     }
     return { respuesta: `📝 La funcion *${intent}* estara disponible proximamente.`, subflow: null };
 }
@@ -175,7 +184,7 @@ async function procesarMensaje(cliente, msg) {
                 if (decision === 'confirmar') {
                     intentFinal = estado.intent;
                     const { respuesta, subflow } = await despacharIntent(
-                        intentFinal, estado.payload, operario, null
+                        intentFinal, estado.payload, operario, null, msg
                     );
                     respuestaFinal = respuesta;
                     await borrarEstado(celular);
