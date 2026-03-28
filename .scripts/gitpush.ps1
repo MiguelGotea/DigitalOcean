@@ -13,6 +13,10 @@ if ($LASTEXITCODE -ne 0) {
     exit 0
 }
 
+# Pull previo por si el repo en GitHub cambio (sync)
+Write-Host "Sincronizando con cambios remotos..." -ForegroundColor Yellow
+git pull origin main --rebase
+
 git push origin main
 
 if ($LASTEXITCODE -eq 0) {
