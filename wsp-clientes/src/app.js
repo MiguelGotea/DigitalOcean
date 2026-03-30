@@ -5,6 +5,7 @@ const express = require('express');
 const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion, setReadyHook } = require('./whatsapp/client');
 const { iniciarWorker } = require('./workers/campaign_worker');
 const { iniciarKeepalive } = require('./workers/keepalive_worker');
+const { iniciarNotificationWorker } = require('./workers/notification_worker');
 const { WSP_INSTANCIA } = require('./config/api');
 
 const logApp = (msg) => {
@@ -141,8 +142,10 @@ async function arrancar() {
         .then((clienteWA) => {
             if (!clienteWA) return;
             iniciarWorker();
+            iniciarNotificationWorker();
             iniciarKeepalive(clienteWA);
             logApp('📣 Modo Campañas activo');
+            logApp('🔔 Modo Notificaciones Transaccionales activo');
             logApp('🔄 Keepalive activo');
         })
         .catch(err => {
