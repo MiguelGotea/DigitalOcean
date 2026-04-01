@@ -41,10 +41,10 @@ const iniciarKeepalive = (_cliente) => {
         }
     };
 
-    console.log(`[${INSTANCIA}] 🕒 Keepalive: inicio en 5m, frecuencia cada 6h`);
+    console.log(`[${INSTANCIA}] 🕒 Keepalive: inicio en 5m, frecuencia cada 12h`);
     setTimeout(() => {
         enviarKeepalive();
-        setInterval(enviarKeepalive, 360 * 60 * 1000);
+        setInterval(enviarKeepalive, 720 * 60 * 1000);
     }, 5 * 60 * 1000);
 };
 
