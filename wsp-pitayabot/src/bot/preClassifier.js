@@ -183,7 +183,9 @@ const REGLAS = [
         intent: 'buscar_tareas_retrasadas',
         confianza: 0.99,
         test(t) {
-            return /\b(retrasadas?|vencidas?|atrasadas?|tareas?\s+vencidas?|fuera\s+de\s+tiempo)\b/i.test(t);
+            // "retrasadas", "atrasadas", "vencidas", "fuera de tiempo", "retrsados" (typo)
+            return /\b(retr[ae]sadas?|vencidas?|atrasadas?|retr[ae]sados?|fuera\s+de\s+tiempo)\b/i.test(t)
+                && /\b(tareas?|pendientes?|proyectos?)\b/i.test(t);
         },
         entidades() { return {}; },
         frase()     { return 'Buscando tareas retrasadas o vencidas... ⏰'; }

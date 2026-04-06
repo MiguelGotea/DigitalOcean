@@ -101,28 +101,47 @@ async function clasificarConGoogle(mensaje) {
         }],
         generationConfig: {
             temperature:        0.1,
-            maxOutputTokens:    512,
+            maxOutputTokens:    1024,
             response_mime_type: 'application/json'
-        }
+        },
+        safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT',         threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH',         threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',   threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT',  threshold: 'BLOCK_NONE' }
+        ]
     };
 
     const resp = await axios.post(endpoint, payload, {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 8_000   // mucho más agresivo que el PHP (25s)
+        timeout: 10_000   // Ligeramente más tiempo que antes (8s)
     });
 
-    const texto = resp.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!texto) throw new Error('Respuesta vacía de Google Gemini');
+    const textoRaw = resp.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!textoRaw) {
+        // Puede estar bloqueado o vacío
+        const reason = resp.data?.candidates?.[0]?.finishReason || 'unknown';
+        throw new Error(`Respuesta vacía de Google Gemini (Reason: ${reason})`);
+    }
 
-    // Extraer JSON de la respuesta
-    const inicio = texto.indexOf('{');
-    const fin    = texto.lastIndexOf('}');
-    if (inicio === -1 || fin === -1) throw new Error('No se encontró JSON en respuesta de Gemini');
+    // Extraer JSON de la respuesta (robusto)
+    const inicio = textoRaw.indexOf('{');
+    const fin    = textoRaw.lastIndexOf('}');
+    
+    if (inicio === -1 || fin === -1) {
+        console.error(`[CLASSIFIER] ❌ Gemini devolvió texto sin JSON: "${textoRaw.substring(0, 150)}..."`);
+        throw new Error('No se encontró JSON en respuesta de Gemini');
+    }
 
-    const resultado = JSON.parse(texto.slice(inicio, fin + 1));
-    if (!resultado?.intent) throw new Error('JSON sin campo "intent"');
-
-    return resultado;
+    const jsonStr = textoRaw.slice(inicio, fin + 1);
+    try {
+        const resultado = JSON.parse(jsonStr);
+        if (!resultado?.intent) throw new Error('JSON sin campo "intent"');
+        return resultado;
+    } catch (e) {
+        console.error(`[CLASSIFIER] ❌ Error parseando JSON de Gemini: ${e.message}. Raw: "${jsonStr.substring(0, 150)}..."`);
+        throw new Error('JSON de Gemini malformado');
+    }
 }
 
 // ─── Capa 3: Fallback → clasificar.php en Hostinger ──────────────────────────
