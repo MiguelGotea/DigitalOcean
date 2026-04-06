@@ -18,7 +18,7 @@
  *    Hostinger que tiene la cascada completa de proveedores.
  */
 
-const axios = require('axios');
+const axios  = require('axios');
 const { API_BASE_URL, WSP_TOKEN, GOOGLE_AI_API_KEY } = require('../config/api');
 const { preclasificar } = require('./preClassifier');
 const { log, logError } = require('../utils/logger');
@@ -28,8 +28,8 @@ const MODULO = 'CLASSIFIER';
 // ─── Prompt del sistema ───────────────────────────────────────────────────────
 
 function buildSystemPrompt() {
-    const tz = 'America/Managua';
-    const hoy = new Date().toLocaleDateString('es-NI', {
+    const tz   = 'America/Managua';
+    const hoy  = new Date().toLocaleDateString('es-NI', {
         timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
 
@@ -91,7 +91,7 @@ Hoy es: ${hoy}`;
 async function clasificarConGoogle(mensaje) {
     if (!GOOGLE_AI_API_KEY) return null; // No configurado
 
-    const model = 'gemini-flash-latest';  // igual que clasificar.php
+    const model    = 'gemini-flash-latest';  // igual que clasificar.php
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GOOGLE_AI_API_KEY}`;
 
     const payload = {
@@ -100,8 +100,8 @@ async function clasificarConGoogle(mensaje) {
             parts: [{ text: `${buildSystemPrompt()}\n\nMensaje del usuario:\n${mensaje}` }]
         }],
         generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 512,
+            temperature:        0.1,
+            maxOutputTokens:    512,
             response_mime_type: 'application/json'
         }
     };
@@ -116,7 +116,7 @@ async function clasificarConGoogle(mensaje) {
 
     // Extraer JSON de la respuesta
     const inicio = texto.indexOf('{');
-    const fin = texto.lastIndexOf('}');
+    const fin    = texto.lastIndexOf('}');
     if (inicio === -1 || fin === -1) throw new Error('No se encontró JSON en respuesta de Gemini');
 
     const resultado = JSON.parse(texto.slice(inicio, fin + 1));
@@ -148,12 +148,12 @@ async function clasificarConPHP(mensaje) {
     // en ese caso el intent viene directamente en data (sin clave data)
     if (data?.success && data?.intent) {
         return {
-            intent: data.intent,
-            entidades: data.entidades || {},
-            confianza: data.confianza ?? 0,
-            ambiguo: data.ambiguo ?? true,
+            intent:             data.intent,
+            entidades:          data.entidades   || {},
+            confianza:          data.confianza   ?? 0,
+            ambiguo:            data.ambiguo     ?? true,
             frase_confirmacion: data.frase_confirmacion || 'No pude entender tu mensaje.',
-            proveedor_usado: data.proveedor_usado || null,
+            proveedor_usado:    data.proveedor_usado || null,
         };
     }
 
@@ -199,12 +199,12 @@ async function clasificar(mensaje) {
 
     // ── Fallback seguro ───────────────────────────────────────────────────────
     return {
-        intent: 'desconocido',
-        entidades: {},
-        confianza: 0,
-        ambiguo: true,
+        intent:             'desconocido',
+        entidades:          {},
+        confianza:          0,
+        ambiguo:            true,
         frase_confirmacion: 'No pude entender tu mensaje. ¿Puedes reformularlo?',
-        proveedor_usado: null
+        proveedor_usado:    null
     };
 }
 
