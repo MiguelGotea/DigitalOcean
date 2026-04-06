@@ -111,27 +111,36 @@ const REGLAS = [
         intent: 'crear_tarea',
         confianza: 0.98,
         test(t) {
-            return /\b(crea|crear|agrega|agregar|a[nñ]ade|a[nñ]adir|nueva?|nuevo|registra|registrar|manda\s+a|mandar\s+a)\b.{0,20}\b(tarea|pendiente|to[\-\s]?do)\b/i.test(t);
+            return (
+                // Forma directa: "crea/agrega/nueva... una tarea de X"
+                /\b(crea|crear|agrega|agregar|a[nñ]ade|a[nñ]adir|nueva?|nuevo|registra|registrar|manda\s+a|mandar\s+a|hay\s+que|tengo\s+que)\b.{0,20}\b(tarea|pendiente|to[\-\s]?do)\b/i.test(t)
+                // Forma invertida: "tarea nueva de X" / "tarea de X para Y"
+                || /\b(tarea|pendiente)\s+(nueva?|urgente)\b/i.test(t)
+                // Al inicio de la frase: "tarea de recoger...", "nueva tarea de..."
+                || /^(nueva?\s+tarea|tarea\s+nueva?|tarea\s+de\s+)\b/i.test(t)
+            );
         },
         entidades(t) {
             const titulo = extraerTitulo(t, [
-                /\b(crea|crear|agrega|agregar|a[nñ]ade|a[nñ]adir|nueva?|nuevo|registra|registrar|manda\s+a|mandar\s+a)\s+(una?\s+)?tarea\s+(de\s+)?/gi,
-                /\b(nueva?\s+)?tarea\b\s*/gi,
-                /\bpendiente\b/gi,
+                /\b(crea|crear|agrega|agregar|a[nñ]ade|a[nñ]adir|nueva?|nuevo|registra|registrar|manda\s+a|mandar\s+a|hay\s+que|tengo\s+que)\s+(una?\s+)?tarea\s+(de\s+)?/gi,
+                /^(nueva?\s+)?tarea\s+(nueva?\s+)?(de\s+)?/gi,
+                /\b(tarea|pendiente)\b\s*/gi,
             ]);
             return {
                 titulo,
                 fecha:       extraerFecha(t),
                 descripcion: null,
-                prioridad:   /\b(urgente|alta\s+prioridad)\b/i.test(t) ? 'alta' : 'media',
+                prioridad:   /\b(urgente|urgencia|alta\s+prioridad|m[aá]xima\s+urgencia|urgencia\s+m[aá]xima|prioridad\s+alta)\b/i.test(t) ? 'alta' : 'media',
             };
         },
         frase(ent) {
             const titulo = ent.titulo ? `*${ent.titulo}*` : '(sin título)';
             const fecha  = ent.fecha  ? `con fecha límite *${ent.fecha}*` : 'sin fecha límite';
-            return `Vas a crear la tarea ${titulo} ${fecha} ✅`;
+            const prio   = ent.prioridad === 'alta' ? ' 🔴 Prioridad alta' : '';
+            return `Vas a crear la tarea ${titulo} ${fecha}${prio} ✅`;
         }
     },
+
 
     // ── BUSCAR TAREA ─────────────────────────────────────────────────────────
     {

@@ -91,7 +91,7 @@ Hoy es: ${hoy}`;
 async function clasificarConGoogle(mensaje) {
     if (!GOOGLE_AI_API_KEY) return null; // No configurado
 
-    const model    = 'gemini-2.0-flash';
+    const model    = 'gemini-1.5-flash-latest';  // mismo que usa clasificar.php
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GOOGLE_AI_API_KEY}`;
 
     const payload = {
@@ -138,11 +138,26 @@ async function clasificarConPHP(mensaje) {
     );
 
     const data = resp.data;
-    if (!data?.success || !data?.data) {
-        throw new Error(data?.message || 'Respuesta inesperada de clasificar.php');
+
+    // Caso 1: respuesta normal con resultado dentro de data.data
+    if (data?.success && data?.data && data.data?.intent) {
+        return data.data;
     }
 
-    return data.data;
+    // Caso 2: PHP devolvió el fallback de "todos los proveedores fallaron"
+    // en ese caso el intent viene directamente en data (sin clave data)
+    if (data?.success && data?.intent) {
+        return {
+            intent:             data.intent,
+            entidades:          data.entidades   || {},
+            confianza:          data.confianza   ?? 0,
+            ambiguo:            data.ambiguo     ?? true,
+            frase_confirmacion: data.frase_confirmacion || 'No pude entender tu mensaje.',
+            proveedor_usado:    data.proveedor_usado || null,
+        };
+    }
+
+    throw new Error(data?.message || 'Respuesta inesperada de clasificar.php');
 }
 
 // ─── Clasificador principal ───────────────────────────────────────────────────
