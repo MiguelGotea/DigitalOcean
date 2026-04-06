@@ -147,22 +147,36 @@ const REGLAS = [
         intent: 'buscar_tarea',
         confianza: 0.97,
         test(t) {
-            return /\b(busca|buscar|encuentra|ver|mostrar|muestra|listar|lista|dame|qu[eé]\s+tareas?)\b.{0,25}\b(tarea|tareas|pendiente|pendientes)\b/i.test(t)
-                || /\b(mis\s+)?(tarea|tareas|pendiente|pendientes)\b.{0,10}\b(activas?|abiertas?|pendientes?)\b/i.test(t);
+            return (
+                // "busca/ver/dame/muestra las tareas..."
+                /\b(busca|buscar|encuentra|ver|mostrar|muestra|listar|lista|dame)\b.{0,25}\b(tarea|tareas|pendiente|pendientes)\b/i.test(t)
+                // "qué tareas tengo/hay/quedaron..." — la palabra tarea aparece sola
+                || /\bqu[eé]\s+tareas?\b/i.test(t)
+                // "cuántas/cuáles tareas..."
+                || /\b(cu[aá]ntas?|cu[aá]les?)\s+(son\s+)?(mis\s+)?(las\s+)?tareas?\b/i.test(t)
+                // "mis tareas activas/abiertas/de hoy"
+                || /\b(mis\s+)?(tarea|tareas|pendiente|pendientes)\b.{0,15}\b(activas?|abiertas?|pendientes?|de\s+hoy|de\s+ma[nñ]ana)\b/i.test(t)
+                // "tareas de hoy/mañana"
+                || /\btareas?\s+de\s+(hoy|ma[nñ]ana|esta\s+semana)\b/i.test(t)
+            );
         },
         entidades(t) {
             const kw = extraerTitulo(t, [
                 /\b(busca|buscar|encuentra|ver|mostrar|muestra|listar|lista|dame)\s+(la\s+|las\s+|el\s+|una?\s+)?(mis\s+)?(tarea|tareas|pendiente|pendientes)?\s*/gi,
+                /\bqu[eé]\s+tareas?\s+(tengo|hay|quedaron|me\s+faltan)?\s*/gi,
+                /\b(cu[aá]ntas?|cu[aá]les?)\s+(son\s+)?(mis\s+)?(las\s+)?tareas?\s*/gi,
                 /\b(mis\s+)?(tarea|tareas|pendiente|pendientes)\b/gi,
             ]);
-            return { palabras_clave: kw || '', titulo: kw };
+            return { palabras_clave: kw || '', titulo: kw, fecha: extraerFecha(t) };
         },
         frase(ent) {
+            if (ent.fecha) return `Buscando tus tareas para *${ent.fecha}*...`;
             return ent.palabras_clave
                 ? `Buscando tareas con "${ent.palabras_clave}"...`
                 : `Buscando tus tareas...`;
         }
     },
+
 
     // ── TAREAS RETRASADAS ─────────────────────────────────────────────────────
     {
