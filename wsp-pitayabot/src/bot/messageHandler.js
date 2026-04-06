@@ -174,7 +174,7 @@ async function procesarMensaje(cliente, msg) {
                 } else {
                     // No es número → empezar de nuevo
                     await borrarEstado(celular);
-                    return clasificarYConfirmar(cliente, jid, celular, codOperario, operario, textoRaw, inicio);
+                    return clasificarYConfirmar(cliente, jid, celular, codOperario, operario, textoRaw, inicio, msg);
                 }
 
             } else {
@@ -223,12 +223,12 @@ async function procesarMensaje(cliente, msg) {
                 } else {
                     // Nuevo mensaje → descartar estado anterior y reclasificar
                     await borrarEstado(celular);
-                    return clasificarYConfirmar(cliente, jid, celular, codOperario, operario, textoRaw, inicio);
+                    return clasificarYConfirmar(cliente, jid, celular, codOperario, operario, textoRaw, inicio, msg);
                 }
             }
 
         } else {
-            return clasificarYConfirmar(cliente, jid, celular, codOperario, operario, textoRaw, inicio);
+            return clasificarYConfirmar(cliente, jid, celular, codOperario, operario, textoRaw, inicio, msg);
         }
 
     } catch (err) {
@@ -242,7 +242,7 @@ async function procesarMensaje(cliente, msg) {
     await registrarLog({ codOperario, celular, intent: intentFinal, mensajeEntrada: textoRaw, respuestaBot: respuestaFinal, exitoso, errorDetalle, duracionMs: Date.now() - inicio });
 }
 
-async function clasificarYConfirmar(cliente, jid, celular, codOperario, operario, texto, inicio) {
+async function clasificarYConfirmar(cliente, jid, celular, codOperario, operario, texto, inicio, msg = null) {
     let respuestaFinal = '';
     let intentFinal    = 'desconocido';
     let exitoso        = true;
