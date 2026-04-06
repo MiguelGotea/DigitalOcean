@@ -12,7 +12,7 @@
  */
 
 const axios  = require('axios');
-const { API_BASE_URL, WSP_TOKEN } = require('../config/api');
+const { API_BASE_URL, WSP_TOKEN, AUTO_EXEC_MIN_CONFIANZA } = require('../config/api');
 const { normalizarNumero, esGrupo } = require('../utils/phone');
 const { log, logError } = require('../utils/logger');
 const { clasificar }    = require('./classifier');
@@ -37,7 +37,8 @@ async function prepararConfirmacion(intent, entidades, operario) {
 }
 
 const MODULO             = 'MSG_HANDLER';
-const CONFIANZA_MINIMA   = 0.7;
+const CONFIANZA_MINIMA   = 0.7;    // mínima para considerar el intent válido
+// AUTO_EXEC_MIN_CONFIANZA viene de config/api.js (env: AUTO_EXEC_MIN_CONFIANZA, default 0.97)
 
 // Intents que pertenecen al modulo de tareas
 const INTENTS_TAREAS = new Set([
@@ -250,52 +251,86 @@ async function clasificarYConfirmar(cliente, jid, celular, codOperario, operario
     try {
         const clas = await clasificar(texto);
         intentFinal = clas.intent;
-        log(MODULO, `🧠 Clasificación: intent=${clas.intent} conf=${clas.confianza} ambiguo=${clas.ambiguo}`);
+        log(MODULO, `🧠 Clasificación: intent=${clas.intent} conf=${clas.confianza} via=${clas.proveedor_usado} ambiguo=${clas.ambiguo}`);
 
         if (clas.confianza >= CONFIANZA_MINIMA && !clas.ambiguo && clas.intent !== 'desconocido') {
 
-            // Para intents de cancelar/finalizar/modificar: buscar tarea primero
-            const preConfirm = await prepararConfirmacion(clas.intent, clas.entidades, operario);
+            // ── [Sol. 3] Ejecución directa sin confirmación ───────────────────
+            // Si la confianza supera AUTO_EXEC_MIN_CONFIANZA, ejecutar de inmediato
+            // sin pasar por el flujo de confirmación (ahorra ~5s de interacción).
+            // Excepción: intents que requieren buscar primero (finalizar/cancelar/modificar)
+            // siempre pasan por prepararConfirmacion para mostrar la tarea exacta.
+            const puedeEjecutarDirecto =
+                clas.confianza >= AUTO_EXEC_MIN_CONFIANZA
+                && !['finalizar_tarea', 'cancelar_tarea', 'modificar_tarea_fecha',
+                     'cancelar_reunion', 'modificar_reunion_fecha'].includes(clas.intent);
 
-            if (preConfirm) {
-                if (preConfirm.tipo === 'respuesta_directa') {
-                    // No se encontro la tarea — responder directo sin guardar estado
-                    respuestaFinal = preConfirm.respuesta;
-                } else if (preConfirm.tipo === 'lista') {
-                    // Multiples resultados — guardar subflow de seleccion
-                    await guardarEstado(
-                        codOperario, celular,
-                        'seleccion_lista',
-                        preConfirm.payloadSubflow,
-                        'Selecciona el numero de la tarea.'
+            if (puedeEjecutarDirecto) {
+                log(MODULO, `⚡ Ejecución directa (conf=${clas.confianza} ≥ ${AUTO_EXEC_MIN_CONFIANZA}): ${clas.intent}`);
+                const { respuesta, subflow } = await despacharIntent(
+                    clas.intent, clas.entidades, operario, null, msg
+                );
+                respuestaFinal = respuesta;
+
+                if (subflow) {
+                    log(MODULO, `🔁 Guardando subflow post-ejecución directa: ${subflow.type}`);
+                    await axios.post(
+                        `${API_BASE_URL}/api/bot/confirmacion/guardar.php`,
+                        {
+                            cod_operario: codOperario, celular,
+                            intent:   subflow.type,
+                            payload:  { intentOriginal: clas.intent, entidades: clas.entidades, lista: subflow.payload?.lista || [] },
+                            frase:    'Selección de tarea pendiente.',
+                            subflow:  'seleccion_lista'
+                        },
+                        { headers: { 'X-WSP-Token': WSP_TOKEN }, timeout: 8_000 }
                     );
-                    respuestaFinal = preConfirm.respuesta; // lista numerada
+                }
+
+            } else {
+                // ── Flujo normal con confirmación ─────────────────────────────
+                // Para intents de cancelar/finalizar/modificar: buscar tarea primero
+                const preConfirm = await prepararConfirmacion(clas.intent, clas.entidades, operario);
+
+                if (preConfirm) {
+                    if (preConfirm.tipo === 'respuesta_directa') {
+                        respuestaFinal = preConfirm.respuesta;
+                    } else if (preConfirm.tipo === 'lista') {
+                        await guardarEstado(
+                            codOperario, celular,
+                            'seleccion_lista',
+                            preConfirm.payloadSubflow,
+                            'Selecciona el numero de la tarea.'
+                        );
+                        respuestaFinal = preConfirm.respuesta;
+                    } else {
+                        // tipo === 'confirmar'
+                        const ok = await guardarEstado(
+                            codOperario, celular,
+                            clas.intent,
+                            preConfirm.payloadEnriquecido,
+                            preConfirm.frase
+                        );
+                        if (ok) {
+                            await enviarConfirmacion(cliente, jid, preConfirm.frase);
+                        } else {
+                            respuestaFinal = formatearError('No se pudo guardar la accion pendiente.');
+                            exitoso = false;
+                        }
+                    }
                 } else {
-                    // tipo === 'confirmar' — guardar estado con payload enriquecido (id real)
-                    const ok = await guardarEstado(
-                        codOperario, celular,
-                        clas.intent,
-                        preConfirm.payloadEnriquecido,
-                        preConfirm.frase
-                    );
+                    // Intent sin prepararConfirmacion — guardar y pedir confirmación
+                    const ok = await guardarEstado(codOperario, celular, clas.intent, clas.entidades, clas.frase_confirmacion);
                     if (ok) {
-                        await enviarConfirmacion(cliente, jid, preConfirm.frase);
+                        await enviarConfirmacion(cliente, jid, clas.frase_confirmacion);
                     } else {
                         respuestaFinal = formatearError('No se pudo guardar la accion pendiente.');
                         exitoso = false;
                     }
                 }
-            } else {
-                // Intent normal (crear_tarea, buscar, retrasadas, etc.) — usar frase de la IA
-                const ok = await guardarEstado(codOperario, celular, clas.intent, clas.entidades, clas.frase_confirmacion);
-                if (ok) {
-                    await enviarConfirmacion(cliente, jid, clas.frase_confirmacion);
-                } else {
-                    respuestaFinal = formatearError('No se pudo guardar la accion pendiente.');
-                    exitoso = false;
-                }
+                log(MODULO, `💬 Confirmacion enviada para: ${intentFinal}`);
             }
-            log(MODULO, `💬 Confirmacion enviada para: ${intentFinal}`);
+
         } else {
             respuestaFinal = formatearNoEntendido();
             log(MODULO, `🤔 Confianza baja o ambiguo`);
