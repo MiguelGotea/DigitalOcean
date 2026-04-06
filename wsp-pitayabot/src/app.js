@@ -7,7 +7,6 @@ const {
     obtenerEstadoActual, obtenerCliente, resetearSesion, setReadyHook
 } = require('./whatsapp/client');
 const { iniciarPitayaBot } = require('./workers/pitayabot_worker');
-const { iniciarKeepalive  } = require('./workers/keepalive_worker');
 const { iniciarScheduler  } = require('./bot/scheduler');
 const { WSP_INSTANCIA }     = require('./config/api');
 
@@ -88,11 +87,9 @@ app.post('/ping', validarToken, async (req, res) => {
         if (!cliente) return res.status(503).json({ success: false, error: 'WhatsApp no conectado' });
         const chatId = numero.includes('@c.us') ? numero : `${numero}@c.us`;
         await cliente.sendMessage(chatId, texto);
-        const DESTINO = process.env.KEEPALIVE_DESTINO;
-        if (DESTINO) {
-            const grupoId = DESTINO.includes('@') ? DESTINO : `${DESTINO}@c.us`;
-            await cliente.sendMessage(grupoId, `⚡ *Prueba de Ping*\nDe: ${agente}\nAl: ${numero}\nMsg: ${texto}`).catch(() => {});
-        }
+        
+        // 2. Notificar al grupo de monitoreo
+
         res.json({ success: true, numero, chatId });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -134,9 +131,7 @@ async function arrancar() {
     iniciarWhatsApp()
         .then((clienteWA) => {
             if (!clienteWA) return;
-            iniciarKeepalive(clienteWA);
             logApp('📣 PitayaBot activo');
-            logApp('🔄 Keepalive activo');
         })
         .catch(err => {
             logApp(`❌ Error fatal en flujo de WhatsApp: ${err.message}`);

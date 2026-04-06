@@ -4,7 +4,6 @@ require('dotenv').config();
 const express = require('express');
 const { iniciarWhatsApp, obtenerEstado, obtenerQR, reportarEstadoVPS, obtenerEstadoActual, obtenerCliente, resetearSesion, setReadyHook } = require('./whatsapp/client');
 const { iniciarWorker } = require('./workers/campaign_worker');
-const { iniciarKeepalive } = require('./workers/keepalive_worker');
 const { iniciarNotificationWorker } = require('./workers/notification_worker');
 const { WSP_INSTANCIA } = require('./config/api');
 
@@ -91,13 +90,7 @@ app.post('/ping', validarToken, async (req, res) => {
         // 1. Enviar el mensaje de prueba al destinatario real
         await cliente.sendMessage(chatId, texto);
 
-        // 2. Notificar al grupo de monitoreo (KEEPALIVE_DESTINO)
-        const DESTINO = process.env.KEEPALIVE_DESTINO;
-        if (DESTINO) {
-            const grupoId = DESTINO.includes('@') ? DESTINO : `${DESTINO}@g.us`;
-            const aviso = `⚡ *Prueba de Ping Manual*\nDe: ${agente}\nAl número: ${numero}\nMensaje: ${texto}`;
-            await cliente.sendMessage(grupoId, aviso).catch(() => {});
-        }
+        // 2. Notificar al grupo de monitoreo
 
         res.json({ success: true, numero, chatId });
     } catch (err) {
@@ -143,10 +136,8 @@ async function arrancar() {
             if (!clienteWA) return;
             iniciarWorker();
             iniciarNotificationWorker();
-            iniciarKeepalive(clienteWA);
             logApp('📣 Modo Campañas activo');
             logApp('🔔 Modo Notificaciones Transaccionales activo');
-            logApp('🔄 Keepalive activo');
         })
         .catch(err => {
             logApp(`❌ Error fatal en flujo de WhatsApp: ${err.message}`);

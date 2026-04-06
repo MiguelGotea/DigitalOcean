@@ -237,7 +237,8 @@ DELAY_MAX_SEGUNDOS=25
 | `/health` | GET | 300X | Verifica si Express está vivo |
 | `/status` | GET | 300X | Estado interno y QR |
 | `/send` | POST | 300X | Envío manual (CRM) |
-| `/ping` | POST | 300X | Prueba de conexión + Notif. a grupo |
+| `/ping` | POST | 300X | Prueba de conexión (envía mensaje de prueba) |
+
 | `/reset` | POST | 300X | Fuerza cierre y nuevo QR |
 
 ---
