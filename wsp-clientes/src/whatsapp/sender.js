@@ -40,8 +40,8 @@ function personalizarMensaje(plantilla, datos) {
  * @param {object} reportarAPI  - Función para reportar a la API
  */
 async function enviarLote(client, campana, destinatarios, reportarResultado) {
-    const DELAY_MIN = parseInt(process.env.DELAY_MIN_SEGUNDOS) || 45;
-    const DELAY_MAX = parseInt(process.env.DELAY_MAX_SEGUNDOS) || 90;
+    const DELAY_MIN = parseInt(process.env.DELAY_MIN_SEGUNDOS) || 120;
+    const DELAY_MAX = parseInt(process.env.DELAY_MAX_SEGUNDOS) || 240;
 
     console.log(`📨 Campaña #${campana.id}: enviando ${destinatarios.length} mensaje(s)...`);
 
@@ -57,12 +57,6 @@ async function enviarLote(client, campana, destinatarios, reportarResultado) {
         let detalle = null;
 
         try {
-            // Verificar que el número existe en WhatsApp
-            const existe = await client.isRegisteredUser(numeroWA);
-            if (!existe) {
-                throw new Error('Número no registrado en WhatsApp');
-            }
-
             if (campana.imagen_url) {
                 // Enviar imagen con caption
                 const { MessageMedia } = require('whatsapp-web.js');
