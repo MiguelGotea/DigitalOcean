@@ -40,8 +40,8 @@ function personalizarMensaje(plantilla, datos) {
  * @param {object} reportarAPI  - Función para reportar a la API
  */
 async function enviarLote(client, campana, destinatarios, reportarResultado) {
-    const DELAY_MIN = parseInt(process.env.DELAY_MIN_SEGUNDOS) || 8;
-    const DELAY_MAX = parseInt(process.env.DELAY_MAX_SEGUNDOS) || 25;
+    const DELAY_MIN = parseInt(process.env.DELAY_MIN_SEGUNDOS) || 45;
+    const DELAY_MAX = parseInt(process.env.DELAY_MAX_SEGUNDOS) || 90;
 
     console.log(`📨 Campaña #${campana.id}: enviando ${destinatarios.length} mensaje(s)...`);
 
