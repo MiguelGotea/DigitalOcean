@@ -87,4 +87,37 @@ async function enviarLote(client, campana, destinatarios, reportarResultado) {
     console.log(`✅ Lote de campaña #${campana.id} completado.`);
 }
 
-module.exports = { enviarLote, formatearNumeroWA };
+/**
+ * Envía UN SOLO destinatario — sin delay interno.
+ * El delay aleatorio entre mensajes lo maneja campaign_worker.js
+ */
+async function enviarUno(client, campana, dest, reportarResultado) {
+    const numeroWA = formatearNumeroWA(dest.telefono);
+    const mensajePersonal = personalizarMensaje(campana.mensaje, {
+        nombre: dest.nombre,
+        sucursal: dest.sucursal || '',
+        fecha_planilla: dest.fecha_planilla || ''
+    });
+
+    let resultado = 'exito';
+    let detalle = null;
+
+    try {
+        if (campana.imagen_url) {
+            const { MessageMedia } = require('whatsapp-web.js');
+            const media = await MessageMedia.fromUrl(campana.imagen_url, { unsafeMime: true });
+            await client.sendMessage(numeroWA, media, { caption: mensajePersonal });
+        } else {
+            await client.sendMessage(numeroWA, mensajePersonal);
+        }
+        console.log(`  ✅ Enviado a ${dest.telefono} (${dest.nombre})`);
+    } catch (err) {
+        resultado = 'error';
+        detalle = err.message;
+        console.error(`  ❌ Error con ${dest.telefono}: ${err.message}`);
+    }
+
+    await reportarResultado(campana.id, dest.id, resultado, detalle);
+}
+
+module.exports = { enviarLote, enviarUno, formatearNumeroWA };
