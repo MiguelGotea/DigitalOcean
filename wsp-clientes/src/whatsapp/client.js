@@ -118,11 +118,44 @@ async function iniciarWhatsApp() {
     // ── Eventos ──
 
     clienteWA.on('qr', async (qr) => {
-        logMsg('📷 QR generado — escanéalo desde el ERP');
-        estadoActual = 'qr_pendiente';
-        qrBase64 = await qrcode.toDataURL(qr);
-        await reportarEstadoVPS('qr_pendiente', qrBase64);
+        try {
+            logMsg('📷 QR generado — escanéalo desde el ERP');
+            estadoActual = 'qr_pendiente';
+            qrBase64 = await qrcode.toDataURL(qr);
+            await reportarEstadoVPS('qr_pendiente', qrBase64);
+        } catch (qrErr) {
+            // Si el frame fue detachado mientras procesaba el QR, auto-recuperar
+            if (qrErr.message && qrErr.message.includes('detached Frame')) {
+                logMsg(`🔴 [DETACHED-FRAME] Frame de Chrome muerto durante QR — forzando auto-recuperación...`);
+                resetearSesion(false).catch(e => logMsg(`Error en auto-recuperación: ${e.message}`));
+            } else {
+                logMsg(`⚠️ Error procesando QR: ${qrErr.message}`);
+            }
+        }
     });
+
+    // Adjuntar listeners de errores de Chrome inmediatamente (no solo en 'ready')
+    // Captura crashes durante la fase de QR antes de que esté autenticado
+    const adjuntarMonitoreoCrash = () => {
+        try {
+            const page = clienteWA.pupPage;
+            if (!page || page._closed) return;
+            page.on('error', err => {
+                const esDetach = err.message && err.message.includes('detached Frame');
+                logMsg(`🔴 [CRASH-PAGE] ${esDetach ? 'Frame detachado' : 'Crash de Chrome'}: ${err.message}`);
+                resetearSesion(false).catch(e => logMsg(`Error en auto-recuperación: ${e.message}`));
+            });
+            page.on('pageerror', pageErr => {
+                logMsg(`⚠️ [PAGE-ERROR] Error JS en WhatsApp Web: ${pageErr.message.slice(0, 120)}`);
+            });
+            logMsg(`🔍 [ID:${currentInitId}] Monitoreo de crash de Chrome activado.`);
+        } catch (e) {
+            logMsg(`⚠️ No se pudo inyectar monitoreo de crash: ${e.message}`);
+        }
+    };
+
+    // Intentar adjuntar el monitoreo en cuanto Puppeteer levanta la página
+    setTimeout(adjuntarMonitoreoCrash, 3000);
 
     clienteWA.on('ready', async () => {
         if (currentInitId !== sessionIntentId) return;
@@ -133,22 +166,8 @@ async function iniciarWhatsApp() {
         qrBase64 = null;
         await reportarEstadoVPS('conectado', null, numero);
 
-        // --- DEEP DEBUGGING: Escuchar errores internos de la página de Chrome ---
-        try {
-            if (clienteWA.pupPage) {
-                clienteWA.pupPage.on('error', err => {
-                    logMsg(`🔴 [CRITICAL P-ERROR] La página de Chrome hizo crash: ${err.message}`);
-                    // Auto-recuperación NO destructiva (borrarSesion = false)
-                    resetearSesion(false).catch(e => logMsg(`Error al intentar auto-recuperar: ${e.message}`));
-                });
-                clienteWA.pupPage.on('pageerror', pageErr => {
-                    logMsg(`⚠️ [PAGE-ERROR] Error JS dentro de WhatsApp Web: ${pageErr.message}`);
-                });
-                logMsg(`🔍 [ID:${currentInitId}] Monitoreo profundo de la página Chrome activado.`);
-            }
-        } catch (e) {
-            logMsg(`⚠️ No se pudo inyectar el monitoreo de página: ${e.message}`);
-        }
+        // Re-adjuntar monitoreo de crash en 'ready' (el anterior puede haberse perdido)
+        adjuntarMonitoreoCrash();
 
         // --- RE-VINCULACIÓN DE WORKERS ---
         if (readyHook) {
