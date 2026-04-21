@@ -98,6 +98,102 @@ wsp-planilla/                           # PM2 :3005 — Notif. planilla (AUTÓNO
 
 ---
 
+## 🐛 Post-Mortem — Incidente "Servicio Desconectado" (21-Apr-2026)
+
+> **Síntoma:** Todos los bots aparecían como "Desconectado" en el ERP a pesar de funcionar correctamente (PitayaBot respondía mensajes, campañas se enviaban, etc.).
+
+### Causa raíz: 3 bugs en cadena
+
+#### Bug 1 — `CONVERT_TZ` incorrecto en `registrar_sesion.php` ⚠️ CRÍTICO
+
+El heartbeat del VPS escribe `ultimo_ping` usando:
+
+```sql
+-- ❌ ANTES (incorrecto):
+CONVERT_TZ(NOW(), '+00:00', '-06:00')
+
+-- ✅ DESPUÉS (correcto):
+NOW()
+```
+
+**¿Por qué fallaba?** El servidor MySQL de Hostinger ya está en zona horaria CST (UTC-6). La función `CONVERT_TZ` asumía que `NOW()` era UTC y restaba 6 horas adicionales, almacenando una hora 6h en el pasado. Cuando `status.php` comparaba con `time()` (PHP en CST), obtenía siempre un `seg_desde_ping` de ~21600 segundos (6h), muy por encima del umbral de 180s → siempre `activo = false`.
+
+```
+MySQL NOW()  = 15:38 CST  (servidor ya en CST)
+CONVERT_TZ() = 09:38      (restó 6h extra — ¡incorrecto!)
+PHP time()   = 21:38 UTC  = 15:38 CST
+strtotime("09:38" CST) = 15:38 UTC
+
+diff = 21:38 UTC − 15:38 UTC = 6 horas → activo: false ✗
+```
+
+**Archivos afectados:**
+- `api.batidospitaya.com/api/wsp/registrar_sesion.php` → cambiado a `NOW()`
+
+---
+
+#### Bug 2 — Filas duplicadas en `wsp_sesion_vps_` (UNIQUE KEY faltante)
+
+El `ON DUPLICATE KEY UPDATE` del INSERT no funcionaba porque la tabla **no tenía constraint `UNIQUE` en `instancia`**. Cada heartbeat insertaba una fila nueva en lugar de actualizar la existente.
+
+`status.php` leía con `LIMIT 1` sin `ORDER BY`, devolviendo siempre la fila más antigua (primer insert), cuyo `ultimo_ping` crecía con el tiempo.
+
+**Fix aplicado:**
+```sql
+-- status.php ahora lee la fila más reciente:
+ORDER BY ultimo_ping DESC LIMIT 1
+```
+
+**Pendiente — ejecutar en phpMyAdmin:**
+```sql
+-- Limpiar filas duplicadas (conservar la más reciente por instancia)
+DELETE t1 FROM wsp_sesion_vps_ t1
+INNER JOIN wsp_sesion_vps_ t2
+  ON t1.instancia = t2.instancia
+  AND t1.id < t2.id;
+
+-- Agregar UNIQUE para evitar duplicados futuros
+ALTER TABLE wsp_sesion_vps_ ADD UNIQUE KEY uq_instancia (instancia);
+```
+
+---
+
+#### Bug 3 — ERP llamaba a `api.batidospitaya.com` directamente (caído tras migración proxy)
+
+Al migrar a `proxy.batidospitaya.com`, el servidor ERP (Hostinger) perdió acceso directo a `api.batidospitaya.com`. `campanas_wsp_get_status.php` usaba la URL antigua.
+
+**Fix aplicado:** Ahora intenta el proxy primero y `api.batidospitaya.com` como fallback:
+```php
+// erp.batidospitaya.com/modulos/marketing/ajax/campanas_wsp_get_status.php
+$urls = [
+    'proxy' => 'https://proxy.batidospitaya.com/api/wsp/status.php?instancia=wsp-clientes',
+    'api'   => 'https://api.batidospitaya.com/api/wsp/status.php?instancia=wsp-clientes',
+];
+```
+
+---
+
+### Flujo de diagnóstico (para referencia futura)
+
+```bash
+# 1. Verificar que el ERP llega a la API y ver el ultimo_ping real
+curl -s "https://proxy.batidospitaya.com/api/wsp/status.php?instancia=wsp-clientes" | python3 -m json.tool
+# → Revisar: seg_desde_ping > 180? Si sí, heartbeat no actualiza BD.
+
+# 2. Simular heartbeat desde el VPS (probar si la escritura funciona)
+curl -s -X POST "https://proxy.batidospitaya.com/api/wsp/registrar_sesion.php" \
+  -H "Content-Type: application/json" \
+  -H "X-WSP-Token: <TOKEN>" \
+  -d '{"estado":"qr_pendiente","instancia":"wsp-clientes","qr_base64":null,"numero_telefono":null}'
+# → Volver a llamar status.php y comparar ultimo_ping. Si no cambió → Bug 2 (filas duplicadas).
+# → Si devuelve error → revisar token o conectividad.
+
+# 3. Ver logs del servicio
+pm2 logs wsp-clientes --lines 30 --nostream | grep -iE "heartbeat|error|❌|no se pudo"
+```
+
+---
+
 ## Cómo agregar una nueva instancia
 
 > **Todo desde GitHub. Cero SSH para código.** Solo se usa SSH una vez al crear la instancia.
