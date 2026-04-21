@@ -22,9 +22,9 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3001,
         WSP_INSTANCIA: 'wsp-clientes',
-        // API_BASE_URL se lee del .env en el servidor.
-        // Si hay problemas de heartbeat, descomenta y define aquí:
-        // API_BASE_URL: 'https://api.batidospitaya.com'
+        // Usar el proxy como punto de entrada a la API
+        // api.batidospitaya.com dejó de responder desde el VPS tras la migración del proxy
+        API_BASE_URL: 'https://proxy.batidospitaya.com'
       },
       out_file: './logs/out.log',
       error_file: './logs/error.log',

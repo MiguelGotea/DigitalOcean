@@ -21,7 +21,8 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3003,
-        WSP_INSTANCIA: 'wsp-crmbot'
+        WSP_INSTANCIA: 'wsp-crmbot',
+        API_BASE_URL: 'https://proxy.batidospitaya.com'
       },
       out_file: './logs/out.log',
       error_file: './logs/error.log',

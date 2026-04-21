@@ -27,7 +27,8 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3007,
-        WSP_INSTANCIA: 'wsp-pitayabot'
+        WSP_INSTANCIA: 'wsp-pitayabot',
+        API_BASE_URL: 'https://proxy.batidospitaya.com'
       },
       out_file: './logs/out.log',
       error_file: './logs/error.log',
