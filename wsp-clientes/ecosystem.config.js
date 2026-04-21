@@ -21,7 +21,10 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3001,
-        WSP_INSTANCIA: 'wsp-clientes'
+        WSP_INSTANCIA: 'wsp-clientes',
+        // API_BASE_URL se lee del .env en el servidor.
+        // Si hay problemas de heartbeat, descomenta y define aquí:
+        // API_BASE_URL: 'https://api.batidospitaya.com'
       },
       out_file: './logs/out.log',
       error_file: './logs/error.log',
