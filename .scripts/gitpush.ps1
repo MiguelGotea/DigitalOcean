@@ -1,27 +1,32 @@
 # PowerShell - Push rapido a GitHub
 # Uso: .\.scripts\gitpush.ps1 ["mensaje opcional"]
 
-$fecha = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-$mensaje = $args[0]
-if (-not $mensaje) { $mensaje = $fecha }
+# Auto-navegar a la raíz (GPS Interno)
+Set-Location $PSScriptRoot
+Set-Location ..
 
-git add -A
-git commit -m $mensaje
+# Script Tanque v7 (Anti-Choque)
+git add .
+$msg = $args[0]
+if (-not $msg) { $msg = "Human Push $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" }
+
+git commit -m "$msg" 2>$null
+
+Write-Host "🚀 Intentando sincronizar y subir cambios..." -ForegroundColor Cyan
+git pull origin main --rebase
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Nada que commitear o error en commit." -ForegroundColor Yellow
-    exit 0
+    Write-Host "⚠️ Conflicto con el Bot detectado. Aplicando reparación de Hierro..." -ForegroundColor Yellow
+    git rebase --abort 2>$null
+    git pull origin main --no-rebase -X ours
+    git add .
+    git commit -m "$msg (Conflict Resolved)" 2>$null
 }
-
-# Pull previo por si el repo en GitHub cambio (sync)
-Write-Host "Sincronizando con cambios remotos..." -ForegroundColor Yellow
-git pull origin main --rebase
 
 git push origin main
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "Push exitoso - GitHub Actions desplegara al VPS automaticamente." -ForegroundColor Green
-}
-else {
-    Write-Host "Error en push." -ForegroundColor Red
+    Write-Host "✅ ¡Subida completada con éxito! (GitHub Actions desplegará al VPS)" -ForegroundColor Green
+} else {
+    Write-Host "❌ Error en push." -ForegroundColor Red
 }

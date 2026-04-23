@@ -63,11 +63,32 @@ async function ejecutarCron(nombre, endpoint, clienteWA) {
 //  Helper: Alertas operacionales (formato propio)
 //
 //  La API retorna:
-//    { success: true, alertas: [{ tipo, key_unica, mensaje, destinatarios[] }] }
+//    { success: true, alertas: [{ tipo, key_unica, mensaje, destinatarios[], datos_json }] }
 //
-//  El bot envía directo (no delega el envío a PHP).
-//  Cada alerta ya fue registrada en alertas_wsp_estado por la API antes de retornar.
+//  FLUJO CONFIABLE:
+//    1. Bot recibe alertas (aún NO registradas en alertas_wsp_estado)
+//    2. Bot intenta sendMessage() para cada destinatario
+//    3. Solo si al menos un envío es exitoso → llama marcar_enviado.php
+//    4. Si todos los envíos fallan → alerta NO se marca → se reintenta el próximo minuto
 // ─────────────────────────────────────────────
+
+async function marcarAlertaEnviada(alerta) {
+    try {
+        await axios.post(
+            `${API_BASE_URL}/api/alertas/marcar_enviado.php`,
+            {
+                tipo_alerta: alerta.tipo,
+                key_unica:   alerta.key_unica,
+                datos_json:  alerta.datos_json || {},
+            },
+            { headers: HEADERS, timeout: 10_000 }
+        );
+    } catch (err) {
+        // No crítico: si falla el registro se reintentará el envío,
+        // lo cual puede causar un duplicado pero es preferible a perder la alerta.
+        logError(MODULO, `Error registrando alerta enviada [${alerta.tipo}|${alerta.key_unica}]`, err);
+    }
+}
 
 async function ejecutarAlertas(clienteWA) {
     try {
@@ -84,18 +105,29 @@ async function ejecutarAlertas(clienteWA) {
         log(MODULO, `🔔 ${alertas.length} alerta(s) detectada(s) — enviando...`);
 
         for (const alerta of alertas) {
+            let alMenosUnExitoso = false;
+
             for (const numero of alerta.destinatarios || []) {
                 try {
                     // numero viene sin código de país (8 dígitos NI) → agregar 505
                     const numeroLimpio = String(numero).replace(/\D/g, '');
                     const jid = (numeroLimpio.length === 8 ? '505' + numeroLimpio : numeroLimpio) + '@c.us';
                     await clienteWA.sendMessage(jid, alerta.mensaje);
+                    alMenosUnExitoso = true;
                     await delay(1500); // Anti-ban: 1.5 s entre envíos
                 } catch (sendErr) {
                     logError(MODULO, `Error enviando alerta a ${numero}`, sendErr);
                 }
             }
-            log(MODULO, `  ✅ [${alerta.tipo}] → ${alerta.destinatarios?.length || 0} destinatario(s)`);
+
+            if (alMenosUnExitoso) {
+                // Confirmar entrega → la API registra en alertas_wsp_estado
+                await marcarAlertaEnviada(alerta);
+                log(MODULO, `  ✅ [${alerta.tipo}|${alerta.key_unica}] → ${alerta.destinatarios?.length || 0} destinatario(s) — marcada como enviada`);
+            } else {
+                // Ningún envío tuvo éxito → NO marcar → se reintentará el próximo minuto
+                log(MODULO, `  ⚠️  [${alerta.tipo}|${alerta.key_unica}] — todos los envíos fallaron, se reintentará en el próximo ciclo`);
+            }
         }
 
     } catch (err) {
