@@ -3,12 +3,13 @@
 /**
  * scheduler.js — Cron jobs automáticos de PitayaBot
  *
- * 5 jobs:
- *  - briefing_diario      : Lun-Vie 7:00 AM
- *  - recordatorio_reunion : cada 15 min
- *  - resumen_fin_dia      : Lun-Vie 6:00 PM
- *  - revision_semanal     : Viernes 5:00 PM
- *  - cumpleanios          : Diario 8:00 AM
+ * 6 jobs:
+ *  - alertas_operacionales : cada 1 min  (PC offline, anulaciones web, etc.)
+ *  - briefing_diario       : Lun-Vie 7:00 AM
+ *  - recordatorio_reunion  : cada 15 min
+ *  - resumen_fin_dia       : Lun-Vie 6:00 PM
+ *  - revision_semanal      : Viernes 5:00 PM
+ *  - cumpleanios           : Diario 8:00 AM
  *
  * Cada cron verifica su flag `activo` en bot_crons_config (PHP lo gestiona).
  * El scheduler solo envía lo que el PHP devuelva en data[].
@@ -27,6 +28,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // ─────────────────────────────────────────────
 //  Helper: llama endpoint y envía mensajes
+//  (usado por briefing, reunion, cumpleaños, etc.)
 // ─────────────────────────────────────────────
 
 async function ejecutarCron(nombre, endpoint, clienteWA) {
@@ -58,11 +60,63 @@ async function ejecutarCron(nombre, endpoint, clienteWA) {
 }
 
 // ─────────────────────────────────────────────
+//  Helper: Alertas operacionales (formato propio)
+//
+//  La API retorna:
+//    { success: true, alertas: [{ tipo, key_unica, mensaje, destinatarios[] }] }
+//
+//  El bot envía directo (no delega el envío a PHP).
+//  Cada alerta ya fue registrada en alertas_wsp_estado por la API antes de retornar.
+// ─────────────────────────────────────────────
+
+async function ejecutarAlertas(clienteWA) {
+    try {
+        const resp = await axios.get(`${API_BASE_URL}/api/alertas/check_all.php`, {
+            headers: HEADERS,
+            timeout: 30_000
+        });
+
+        if (!resp.data?.success) return;
+
+        const alertas = resp.data.alertas || [];
+        if (alertas.length === 0) return;
+
+        log(MODULO, `🔔 ${alertas.length} alerta(s) detectada(s) — enviando...`);
+
+        for (const alerta of alertas) {
+            for (const numero of alerta.destinatarios || []) {
+                try {
+                    // numero viene sin código de país (8 dígitos NI) → agregar 505
+                    const numeroLimpio = String(numero).replace(/\D/g, '');
+                    const jid = (numeroLimpio.length === 8 ? '505' + numeroLimpio : numeroLimpio) + '@c.us';
+                    await clienteWA.sendMessage(jid, alerta.mensaje);
+                    await delay(1500); // Anti-ban: 1.5 s entre envíos
+                } catch (sendErr) {
+                    logError(MODULO, `Error enviando alerta a ${numero}`, sendErr);
+                }
+            }
+            log(MODULO, `  ✅ [${alerta.tipo}] → ${alerta.destinatarios?.length || 0} destinatario(s)`);
+        }
+
+    } catch (err) {
+        // Silenciar timeouts normales; solo loguear errores inesperados
+        if (err.code !== 'ECONNABORTED' && err.response?.status !== 401) {
+            logError(MODULO, 'Error en alertas operacionales', err);
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
 //  Inicializar todos los crons
 // ─────────────────────────────────────────────
 
 function iniciarScheduler(clienteWA) {
     log(MODULO, '🚀 Iniciando scheduler de PitayaBot...');
+
+    // ── Alertas operacionales — cada 1 minuto (PC offline, anulaciones web, etc.)
+    cron.schedule('* * * * *', () => {
+        ejecutarAlertas(clienteWA);
+    }, { timezone: TZ });
 
     // ── Briefing matutino — Lunes a Viernes 7:00 AM
     cron.schedule('0 7 * * 1-5', () => {
@@ -89,7 +143,7 @@ function iniciarScheduler(clienteWA) {
         ejecutarCron('Cumpleaños', '/api/bot/scheduler/cumpleanios.php', clienteWA);
     }, { timezone: TZ });
 
-    log(MODULO, '✅ 5 crons registrados (America/Managua)');
+    log(MODULO, '✅ 6 crons registrados (America/Managua)');
 }
 
 module.exports = { iniciarScheduler };
