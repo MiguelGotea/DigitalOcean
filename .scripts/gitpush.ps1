@@ -1,6 +1,9 @@
 # PowerShell - Push rapido a GitHub
 # Uso: .\.scripts\gitpush.ps1 ["mensaje opcional"]
 
+# Forzar codificación UTF8 para emojis
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 # Auto-navegar a la raíz (GPS Interno)
 Set-Location $PSScriptRoot
 Set-Location ..
