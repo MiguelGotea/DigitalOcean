@@ -264,8 +264,8 @@ pm2 save
 
 | Secret | Valor |
 |--------|-------|
-| `DO_SSH_KEY` | Clave privada SSH del Droplet |
-| `DO_HOST` | IP del Droplet |
+| `DO_SSH_KEY` | Clave privada SSH del Droplet | id_ed25519
+| `DO_HOST` | IP del Droplet | 198.211.97.243
 | `DO_USER` | `root` |
 
 ---
