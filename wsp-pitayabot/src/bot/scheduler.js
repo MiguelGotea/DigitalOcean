@@ -142,37 +142,53 @@ async function ejecutarAlertas(clienteWA) {
 //  Inicializar todos los crons
 // ─────────────────────────────────────────────
 
+// Objeto compartido para que los crons siempre usen el cliente más reciente
+// sin necesidad de re-registrar los crons en cada reconexión.
+const estado = { clienteWA: null };
+
+let schedulerIniciado = false;
+
 function iniciarScheduler(clienteWA) {
+    // Actualizar la referencia del cliente (para reconexiones)
+    estado.clienteWA = clienteWA;
+
+    // Evitar registrar los crons más de una vez
+    if (schedulerIniciado) {
+        log(MODULO, '🔄 Scheduler ya activo — actualizando referencia de cliente WhatsApp.');
+        return;
+    }
+    schedulerIniciado = true;
+
     log(MODULO, '🚀 Iniciando scheduler de PitayaBot...');
 
     // ── Alertas operacionales — cada 1 minuto (PC offline, anulaciones web, etc.)
     cron.schedule('* * * * *', () => {
-        ejecutarAlertas(clienteWA);
+        ejecutarAlertas(estado.clienteWA);
     }, { timezone: TZ });
 
     // ── Briefing matutino — Lunes a Viernes 7:00 AM
     cron.schedule('0 7 * * 1-5', () => {
-        ejecutarCron('Briefing Matutino', '/api/bot/scheduler/briefing_diario.php', clienteWA);
+        ejecutarCron('Briefing Matutino', '/api/bot/scheduler/briefing_diario.php', estado.clienteWA);
     }, { timezone: TZ });
 
     // ── Recordatorio de reunión — cada 15 minutos
     cron.schedule('*/15 * * * *', () => {
-        ejecutarCron('Recordatorio Reunión', '/api/bot/scheduler/recordatorio_reunion.php', clienteWA);
+        ejecutarCron('Recordatorio Reunión', '/api/bot/scheduler/recordatorio_reunion.php', estado.clienteWA);
     }, { timezone: TZ });
 
     // ── Resumen fin de día — Lunes a Viernes 6:00 PM
     cron.schedule('0 18 * * 1-5', () => {
-        ejecutarCron('Resumen Fin de Día', '/api/bot/scheduler/resumen_fin_dia.php', clienteWA);
+        ejecutarCron('Resumen Fin de Día', '/api/bot/scheduler/resumen_fin_dia.php', estado.clienteWA);
     }, { timezone: TZ });
 
     // ── Revisión semanal — Viernes 5:00 PM
     cron.schedule('0 17 * * 5', () => {
-        ejecutarCron('Revisión Semanal', '/api/bot/scheduler/revision_semanal.php', clienteWA);
+        ejecutarCron('Revisión Semanal', '/api/bot/scheduler/revision_semanal.php', estado.clienteWA);
     }, { timezone: TZ });
 
     // ── Cumpleaños — Diariamente 8:00 AM
     cron.schedule('0 8 * * *', () => {
-        ejecutarCron('Cumpleaños', '/api/bot/scheduler/cumpleanios.php', clienteWA);
+        ejecutarCron('Cumpleaños', '/api/bot/scheduler/cumpleanios.php', estado.clienteWA);
     }, { timezone: TZ });
 
     log(MODULO, '✅ 6 crons registrados (America/Managua)');
